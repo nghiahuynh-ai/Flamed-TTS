@@ -6,7 +6,7 @@
 
 ![Overall Architecture](https://github.com/flamedtts/Flamed-TTS/blob/main/figs/Flamed-TTS.png)
 <div align="center">
-	<img src="https://github.com/flamedtts/Flamed-TTS/blob/main/figs/CodeDecoder_Denoiser.png" width="640" style="display: block; margin: auto;"/>
+	<img src="https://github.com/flamedtts/Flamed-TTS/blob/main/figs/CodeDecoder-Denoiser.png" width="640" style="display: block; margin: auto;"/>
 </div>
 
 ## 🔥 News

@@ -14,3 +14,14 @@ tgt
 transformers
 einops
 timm
+numpy
+matplotlib
+soundfile
+scipy
+pyworld
+tqdm
+gdown
+wget
+inflect
+unidecode
+wandb

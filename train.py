@@ -1,4 +1,5 @@
 import os
+import platform
 import torch
 import argparse
 from flamed import Flamed
@@ -6,6 +7,25 @@ import lightning.pytorch as pl
 from omegaconf import OmegaConf
 from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+
+
+def _configure_start_method():
+    """Ensure we only fall back to spawn on platforms without a working fork."""
+    import multiprocessing as mp
+
+    preferred = 'fork' if platform.system() == 'Linux' else 'spawn'
+    if preferred not in mp.get_all_start_methods():
+        preferred = 'spawn'
+
+    current = mp.get_start_method(allow_none=True)
+    if current == preferred:
+        return
+
+    try:
+        mp.set_start_method(preferred, force=True)
+    except RuntimeError:
+        # Happens when the method was already set elsewhere; safe to ignore.
+        pass
 
 
 def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, ckpt):
@@ -80,9 +100,7 @@ def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, c
 
 
 if __name__ == '__main__':
-    import multiprocessing as mp
-    mp.set_start_method('spawn')  
-
+    _configure_start_method()
     parser = argparse.ArgumentParser()
     parser.add_argument('--proj_name', type=str, required=True)
     parser.add_argument('--ver', type=str, required=True)

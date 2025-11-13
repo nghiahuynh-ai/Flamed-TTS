@@ -144,27 +144,19 @@ class Flamed(FlamedLightning):
             timbre = timbre.unsqueeze(0).to(self.device)           
             prompts = prompt_processed.unsqueeze(0).to(self.device)
 
-        prior_emb_cond, prior_logits, tgt_mask = self.prior_generator.sample(
-            texts=phonemes,
-            src_lens=torch.zeros(phonemes.size(0), device=self.device) + phonemes.size(-1),
-            max_src_len=phonemes.size(-1),
+        batch_outputs = self.sample_batch(
+            phonemes=phonemes,
+            src_lens=torch.full((phonemes.size(0),), phonemes.size(-1), dtype=torch.long, device=self.device),
             prompts=prompts,
-            prompts_len=prompts.size(-1),
-            nfe=nsteps_durgen,
-            temperature=temp_durgen,
+            timbres=timbre,
+            codec_decoder=codec_decoder,
+            temp_durgen=temp_durgen,
+            temp_denoiser=temp_denoiser,
+            nsteps_durgen=nsteps_durgen,
+            nsteps_denoiser=nsteps_denoiser,
         )
         
-        # flow matching euler solving
-        x1 = self.prob_generator.sample(
-            cond=prior_emb_cond,
-            spk=timbre,
-            nfe=nsteps_denoiser,
-            temperature=temp_denoiser,
-            mask=~tgt_mask.unsqueeze(-1),
-        )
-        
-        wav = codec_decoder.inference(x1, timbre)
-        wav = wav[0][0].detach().cpu().numpy()
+        wav = batch_outputs['wav'][0][0].detach().cpu().numpy()
         
         end_time = time.time()
                 
@@ -172,6 +164,57 @@ class Flamed(FlamedLightning):
             'wav': wav,
             'time': end_time - start_time,
         }
+    
+    @torch.inference_mode()
+    def sample_batch(
+        self,
+        phonemes: torch.Tensor,
+        src_lens: torch.Tensor,
+        prompts: torch.Tensor,
+        timbres: torch.Tensor,
+        codec_decoder: torch.nn.Module = None,
+        temp_durgen: float = 0.3,
+        temp_denoiser: float = 0.3,
+        nsteps_durgen: int = 64,
+        nsteps_denoiser: int = 64,
+    ):
+        start_time = time.time()
+
+        phonemes = phonemes.to(self.device)
+        src_lens = src_lens.to(self.device)
+        prompts = prompts.to(self.device)
+        timbres = timbres.to(self.device)
+
+        prior_emb_cond, prior_logits, tgt_mask = self.prior_generator.sample(
+            texts=phonemes,
+            src_lens=src_lens,
+            max_src_len=phonemes.size(-1),
+            prompts=prompts,
+            prompts_len=prompts.size(-1),
+            nfe=nsteps_durgen,
+            temperature=temp_durgen,
+        )
+        
+        latents = self.prob_generator.sample(
+            cond=prior_emb_cond,
+            spk=timbres,
+            nfe=nsteps_denoiser,
+            temperature=temp_denoiser,
+            mask=~tgt_mask.unsqueeze(-1),
+        )
+
+        outputs = {
+            'prior_embs': prior_emb_cond,
+            'prior_logits': prior_logits,
+            'tgt_mask': tgt_mask,
+            'latents': latents,
+            'time': time.time() - start_time,
+        }
+        
+        if codec_decoder is not None:
+            outputs['wav'] = codec_decoder.inference(latents, timbres)
+        
+        return outputs
     
     def _preprocess_acoustic_prompt(self, acoustic_prompt, sr=16000):
         if isinstance(acoustic_prompt, str):

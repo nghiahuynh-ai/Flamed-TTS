@@ -123,37 +123,47 @@ class LengthRegulator(nn.Module):
         super(LengthRegulator, self).__init__()
 
     def LR(self, x, phone_duration, sil_duration, src_lens, max_len):
-        output = list()
-        tgt_len = list()
-        for frame, phone_dur, sil_dur, frame_len in zip(x, phone_duration, sil_duration, src_lens):
-            expanded = self.expand(frame, phone_dur, sil_dur, frame_len)
-            output.append(expanded)
-            tgt_len.append(expanded.shape[0])
+        B, L, H = x.size()
+        device = x.device
+
+        phone_duration = phone_duration.to(device).float()
+        sil_duration = sil_duration.to(device).float()
+        src_lens = src_lens.to(device)
+
+        idx = torch.arange(L, device=device).unsqueeze(0)
+        valid_mask = idx < src_lens.unsqueeze(1)
+
+        phone_repeat = torch.where(valid_mask, phone_duration, torch.zeros_like(phone_duration))
+        phone_repeat = torch.clamp(phone_repeat.round().long(), min=1)
+
+        sil_repeat = torch.where(valid_mask, sil_duration, torch.zeros_like(sil_duration))
+        sil_repeat = torch.clamp(sil_repeat.round().long(), min=0)
+
+        sil_frames = x[:, :1, :].expand(-1, L, -1).contiguous()
+
+        segments = torch.stack((x, sil_frames), dim=2).reshape(B, -1, H)
+        repeats = torch.stack((phone_repeat, sil_repeat), dim=2).reshape(B, -1)
+
+        tgt_len = repeats.sum(dim=1)
+
+        segments_flat = segments.reshape(-1, H)
+        repeats_flat = repeats.reshape(-1)
+
+        positive_mask = repeats_flat > 0
+        if positive_mask.any():
+            expanded = torch.repeat_interleave(segments_flat[positive_mask], repeats_flat[positive_mask], dim=0)
+        else:
+            expanded = segments_flat.new_zeros((0, H))
+
+        split_sizes = tgt_len.tolist()
+        output = list(torch.split(expanded, split_sizes, dim=0))
 
         if max_len is not None:
             output = pad(output, max_len)
         else:
             output = pad(output)
 
-        return output, torch.LongTensor(tgt_len).to(x.device)
-
-    def expand(self, frame, phone_dur, sil_dur, frame_len):
-        out = list()
-        sil = frame[0,:]
-        for i, vec in enumerate(frame):
-            if i < frame_len.item():
-                phone_expand_size = phone_dur[i].item()
-                sil_expand_size = sil_dur[i].item()
-            else:
-                phone_expand_size = 0
-                sil_expand_size = 0
-            phone_expand_size = max(int(round(phone_expand_size)), 1)
-            sil_expand_size = max(int(round(sil_expand_size)), 0)
-            out.append(vec.expand(phone_expand_size, -1))
-            out.append(sil.expand(sil_expand_size, -1))
-        out = torch.cat(out, 0)
-
-        return out
+        return output, tgt_len.to(device)
 
     def forward(self, x, phone_duration, sil_duration, src_lens, max_len):
         output, tgt_len = self.LR(x, phone_duration, sil_duration, src_lens, max_len)
