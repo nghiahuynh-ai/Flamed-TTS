@@ -1,0 +1,1 @@
+from .flamed import Flamed

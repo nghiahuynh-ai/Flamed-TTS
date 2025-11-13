@@ -41,7 +41,7 @@ To perform inference with pretrained weights, you must download the pretrained w
 
 * With FaCodec, you can download the FaCodec Encoder and FaCodec Decoder directly from Hugging Face: [FaCodec Encoder](https://huggingface.co/amphion/naturalspeech3_facodec/blob/main/ns3_facodec_encoder.bin), [FaCodec Decoder](https://huggingface.co/amphion/naturalspeech3_facodec/blob/main/ns3_facodec_decoder.bin). After downloading process done, please move those checkpoint files to the directory:
 ```
-oz2/
+flamed/
 └── models/
     └── facodec/
         └── checkpoints/

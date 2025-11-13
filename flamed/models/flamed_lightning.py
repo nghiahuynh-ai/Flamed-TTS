@@ -1,18 +1,18 @@
 import torch
 import wandb
 from abc import ABC
-from oz2.models.facodec import (
+from flamed.models.facodec import (
     FACodecEncoder,
     FACodecDecoder,
 )
 from omegaconf import DictConfig
-from oz2.data import OZ2Dataset
+from flamed.data import FlamedDataset
 from lightning import LightningModule
 from pytorch_lightning.utilities import rank_zero_only
 from transformers import get_cosine_schedule_with_warmup
 
 
-class OZ2Lightning(LightningModule, ABC):
+class FlamedLightning(LightningModule, ABC):
     def setup_dataset_optimizer(
         self, 
         dataset_cfg: DictConfig, 
@@ -20,7 +20,7 @@ class OZ2Lightning(LightningModule, ABC):
         ):
         self.dataset_cfg = dataset_cfg
         self.optimizer_cfg = optimizer_cfg
-        self.dataset = OZ2Dataset(dataset_cfg)
+        self.dataset = FlamedDataset(dataset_cfg)
         self.optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=optimizer_cfg['lr'],

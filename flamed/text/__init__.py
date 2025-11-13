@@ -1,7 +1,7 @@
 """ from https://github.com/keithito/tacotron """
 import re
-from oz2.text import cleaners
-from oz2.text.symbols import symbols
+from flamed.text import cleaners
+from flamed.text.symbols import symbols
 
 
 # Mappings from symbol to numeric ID and vice versa:

@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-import oz2.models.module.transformer.Constants as Constants
-from oz2.models.module.transformer.Layers import FFTBlock
-from oz2.text.symbols import symbols
+import flamed.models.module.transformer.Constants as Constants
+from flamed.models.module.transformer.Layers import FFTBlock
+from flamed.text.symbols import symbols
 
 
 def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):

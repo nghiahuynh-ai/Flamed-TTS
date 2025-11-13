@@ -7,25 +7,25 @@ import numpy as np
 from g2p_en import G2p
 from string import punctuation
 from omegaconf import DictConfig
-from oz2.text import text_to_sequence
-from oz2.models.oz2_lightning import OZ2Lightning
-from oz2.models.synthesizer import (
+from flamed.text import text_to_sequence
+from flamed.models.flamed_lightning import FlamedLightning
+from flamed.models.synthesizer import (
     PriorGenerator,
     ProbGenerator,
 )
-from oz2.models.facodec import (
+from flamed.models.facodec import (
     FACodecEncoder,
     FACodecDecoder,
 )
 
 
-class OZ2(OZ2Lightning):
+class Flamed(FlamedLightning):
     
     @classmethod
     def from_pretrained(cls, cfg, ckpt_path, device, weights_only=False, training_mode=False):
         cfg['prob_generator']['device'] = device
         cfg['prior_generator']['device'] = device
-        model = OZ2(cfg)
+        model = Flamed(cfg)
         model.lexicon = model.read_lexicon()
         model.g2p = G2p()
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=weights_only)
@@ -39,7 +39,7 @@ class OZ2(OZ2Lightning):
         return model
     
     def __init__(self, cfg):
-        super(OZ2, self).__init__()
+        super(Flamed, self).__init__()
 
         self.cfg = cfg
         self.prior_generator = PriorGenerator(cfg['prior_generator'])

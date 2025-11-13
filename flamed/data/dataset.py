@@ -7,10 +7,10 @@ import numpy as np
 from typing import Any, Dict, Optional
 from lightning import LightningDataModule
 from torch.utils.data.dataloader import DataLoader
-from oz2.text import text_to_sequence
+from flamed.text import text_to_sequence
 
 
-class OZ2Dataset(LightningDataModule):
+class FlamedDataset(LightningDataModule):
     def __init__(self, config):
         super().__init__()
 

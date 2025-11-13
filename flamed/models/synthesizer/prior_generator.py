@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
-from oz2.models.module import (
+from flamed.models.module import (
     Encoder, 
     Decoder,
 )
 import torch.nn.functional as F
 from .pva import PVA
-from oz2.utils.tools import get_mask_from_lengths
+from flamed.utils.tools import get_mask_from_lengths
 
 
 class PreEncoding(nn.Module):

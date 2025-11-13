@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
-from oz2.utils.tools import get_mask_from_lengths, pad
+from flamed.utils.tools import get_mask_from_lengths, pad
 
 
 class SinusoidalPosEmb(torch.nn.Module):

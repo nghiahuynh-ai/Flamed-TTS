@@ -1,7 +1,7 @@
 import os
 import torch
 import argparse
-from oz2 import OZ2
+from flamed import Flamed
 import lightning.pytorch as pl
 from omegaconf import OmegaConf
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -39,7 +39,7 @@ def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, c
     })
     OmegaConf.save(cfg, os.path.join(os.path.join(exp_root, exp_name), 'config.yaml'))
 
-    model = OZ2(cfg)
+    model = Flamed(cfg)
     model.setup_dataset_optimizer(data_config, optimizer_cfg)
     train_data, val_data = model.get_dataset()
 

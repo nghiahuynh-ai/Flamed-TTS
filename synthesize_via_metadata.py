@@ -1,11 +1,11 @@
 import os
 import torch
 import argparse
-from oz2 import OZ2
+from flamed import Flamed
 from tqdm import tqdm
 import soundfile as sf
 from omegaconf import OmegaConf
-from oz2.models.facodec import FACodecEncoder, FACodecDecoder
+from flamed.models.facodec import FACodecEncoder, FACodecDecoder
 
 
 SR = 16000
@@ -37,8 +37,8 @@ def get_codec(device):
         use_gr_residual_phone=True,
     )
 
-    encoder_ckpt = os.path.join(CURDIR, 'oz2', 'models', 'facodec', 'checkpoints', 'ns3_facodec_encoder.bin')
-    decoder_ckpt = os.path.join(CURDIR, 'oz2', 'models', 'facodec', 'checkpoints', 'ns3_facodec_decoder.bin')
+    encoder_ckpt = os.path.join(CURDIR, 'flamed', 'models', 'facodec', 'checkpoints', 'ns3_facodec_encoder.bin')
+    decoder_ckpt = os.path.join(CURDIR, 'flamed', 'models', 'facodec', 'checkpoints', 'ns3_facodec_decoder.bin')
     fa_encoder.load_state_dict(torch.load(encoder_ckpt, map_location=device))
     fa_decoder.load_state_dict(torch.load(decoder_ckpt, map_location=device))
     fa_encoder.eval()
@@ -68,7 +68,7 @@ def synthesize(args):
     
     cfg = OmegaConf.load(cfg_path)
     codec_encoder, codec_decoder = get_codec(device)
-    model = OZ2.from_pretrained(
+    model = Flamed.from_pretrained(
         cfg=cfg,
         ckpt_path=ckpt_path,
         device=device,
