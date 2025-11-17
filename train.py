@@ -9,20 +9,26 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 
-def _configure_start_method():
-    """Ensure we only fall back to spawn on platforms without a working fork."""
+def _configure_start_method(preferred_method=None):
+    """Ensure multiprocessing start method matches the requested or default policy."""
     import multiprocessing as mp
 
-    preferred = 'fork' if platform.system() == 'Linux' else 'spawn'
-    if preferred not in mp.get_all_start_methods():
-        preferred = 'spawn'
+    env_requested = os.environ.get('FLAMED_MP_START_METHOD')
+    preferred = preferred_method or env_requested
+    default = 'fork' if platform.system() == 'Linux' else 'spawn'
+    target_method = preferred or default
+
+    available = mp.get_all_start_methods()
+    if target_method not in available:
+        fallback = 'spawn' if 'spawn' in available else default
+        target_method = fallback
 
     current = mp.get_start_method(allow_none=True)
-    if current == preferred:
+    if current == target_method:
         return
 
     try:
-        mp.set_start_method(preferred, force=True)
+        mp.set_start_method(target_method, force=True)
     except RuntimeError:
         # Happens when the method was already set elsewhere; safe to ignore.
         pass
@@ -46,7 +52,6 @@ def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, c
     codec_cfg['encoder']['device'] = accelerator
     codec_cfg['decoder']['device'] = accelerator
     optimizer_cfg['device'] = accelerator
-    data_config['device'] = accelerator
     
     optimizer_cfg['epochs'] = epochs
     optimizer_cfg['batch_size'] = batch_size
@@ -100,7 +105,6 @@ def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, c
 
 
 if __name__ == '__main__':
-    _configure_start_method()
     parser = argparse.ArgumentParser()
     parser.add_argument('--proj_name', type=str, required=True)
     parser.add_argument('--ver', type=str, required=True)
@@ -110,7 +114,17 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ckpt', type=str, default=None)
+    parser.add_argument(
+        '--mp_start_method',
+        type=str,
+        choices=['fork', 'spawn', 'forkserver'],
+        default=None,
+        help="Override the multiprocessing start method (defaults to fork on Linux, spawn elsewhere, or set FLAMED_MP_START_METHOD).",
+    )
     args = parser.parse_args()
+
+    mp_start_method = args.mp_start_method
+    _configure_start_method(mp_start_method)
     
     proj_name = args.proj_name
     version = args.ver

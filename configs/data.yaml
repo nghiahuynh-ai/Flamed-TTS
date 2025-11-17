@@ -9,10 +9,10 @@ n_words_min: 3
 prompt_dur_max: 5 #seconds
 prompt_reduced_factor: 0.8
 down_factors: [2, 4, 5, 5]
-batch_size: 32
-num_workers: 1
+batch_size: 16
+num_workers: 8
 vocab_size: 1024
-pin_memory: false
+pin_memory: true
 cleaners: ['english_cleaners']
 add_blank: False
 seed: null
