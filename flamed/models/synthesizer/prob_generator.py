@@ -476,7 +476,7 @@ class ProbGenerator(nn.Module):
         vt = self.denoiser(xt, t.squeeze(-1), spk) * mask
         fm_loss = F.mse_loss(vt, (x1 - (1 - self.sigma_min) * x0) * mask)
 
-        anchor_loss = F.mse_loss(cond, x1)
+        anchor_loss = F.mse_loss(cond * mask, x1 * mask)
 
         return {
             'fm_loss': fm_loss,
