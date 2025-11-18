@@ -471,18 +471,21 @@ class ProbGenerator(nn.Module):
         t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
         x0 = torch.randn_like(cond, device=cond.device) + cond
         xt = t * x1 + (1 - (1 - self.sigma_min) * t) * x0
-        dx = (x1 - (1 - self.sigma_min) * x0) * mask
 
         spk = self._apply_cfg_dropout(spk)
         vt = self.denoiser(xt, t.squeeze(-1), spk) * mask
-        fm_loss = F.mse_loss(vt, dx)
+        fm_loss = F.mse_loss(vt, (x1 - (1 - self.sigma_min) * x0) * mask)
 
         x1_est = (xt + (1 - (1 - self.sigma_min) * t) * vt) * mask
         anchor_loss = F.mse_loss(x1_est, x1)
 
+        x1_est = (x0 + vt) * mask
+        distill_loss = F.mse_loss(x1_est, x1)
+
         return {
             'fm_loss': fm_loss,
-            'anchor_loss': anchor_loss
+            'anchor_loss': anchor_loss,
+            'distill_loss': distill_loss,
         }
 
     def sample(self, cond, spk, mask, nfe=4, temperature=1.0, guidance_scale=None):
