@@ -6,7 +6,7 @@
 
 ![Overall Architecture](https://github.com/flamedtts/Flamed-TTS/blob/main/figs/Flamed-TTS.png)
 <div align="center">
-	<img src="https://github.com/flamedtts/Flamed-TTS/blob/main/figs/CodeDecoder-Denoiser.png" width="640" style="display: block; margin: auto;"/>
+	<img src="https://github.com/flamedtts/Flamed-TTS/blob/main/figs/CodeDecoder_Denoiser.png" width="640" style="display: block; margin: auto;"/>
 </div>
 
 ## 🔥 News
@@ -98,6 +98,7 @@ TBD.
 ## ⚠️ Disclaimer
 
 No individual or organization may use any technology described in this paper to generate, edit, or manipulate the speech of any person, including but not limited to government officials, political figures, or celebrities, without their explicit consent. Unauthorized use may violate applicable copyright, intellectual property, or privacy laws and could result in legal consequences.
+
 
 
 
