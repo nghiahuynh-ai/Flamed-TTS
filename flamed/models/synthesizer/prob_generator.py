@@ -476,16 +476,11 @@ class ProbGenerator(nn.Module):
         vt = self.denoiser(xt, t.squeeze(-1), spk) * mask
         fm_loss = F.mse_loss(vt, (x1 - (1 - self.sigma_min) * x0) * mask)
 
-        x1_est = (xt + (1 - (1 - self.sigma_min) * t) * vt) * mask
-        anchor_loss = F.mse_loss(x1_est, x1)
-
-        x1_est = (x0 + vt) * mask
-        distill_loss = F.mse_loss(x1_est, x1)
+        anchor_loss = F.mse_loss(cond, x1)
 
         return {
             'fm_loss': fm_loss,
             'anchor_loss': anchor_loss,
-            'distill_loss': distill_loss,
         }
 
     def sample(self, cond, spk, mask, nfe=4, temperature=1.0, guidance_scale=None):
