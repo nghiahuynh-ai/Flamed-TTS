@@ -3,8 +3,8 @@ PYTHON ?= python
 .DEFAULT_GOAL := help
 
 # WandB / training defaults
-WANDB_PROJECT ?= flamed-tts
-WANDB_RUN ?= dev-run
+WANDB_PROJECT ?= flamed-tts-v3
+WANDB_RUN ?= forcing-cfg
 WANDB_VERSION ?= local
 WANDB_MODE ?= online
 EXP_ROOT ?= experiments
