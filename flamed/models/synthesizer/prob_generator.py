@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 def modulate(x, shift, scale):
-    return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+    return x * (1 + scale) + shift
 
 
 class Block1D(torch.nn.Module):
@@ -49,7 +49,7 @@ class TimestepEmbedder(nn.Module):
     def timestep_embedding(t, dim, max_period=10000):
         """
         Create sinusoidal timestep embeddings.
-        :param t: a 1-D Tensor of N indices, one per batch element.
+        :param t: a 2-D Tensor of N indices, one per batch element.
                           These may be fractional.
         :param dim: the dimension of the output.
         :param max_period: controls the minimum frequency of the embeddings.
@@ -60,7 +60,7 @@ class TimestepEmbedder(nn.Module):
         freqs = torch.exp(
             -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half
         ).to(device=t.device)
-        args = t[:, None].float() * freqs[None]
+        args = t[:, :, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
             embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
@@ -159,8 +159,8 @@ class ResBlock(nn.Module):
             scale_mlp, 
             gate_mlp
         ) = self.adaLN_modulation(y).chunk(6, dim=-1)
-        x = x + gate_conv.unsqueeze(1) * self.conv_in(modulate(self.ln_conv(x), shift_conv, scale_conv))
-        x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.ln_mlp(x), shift_mlp, scale_mlp))
+        x = x + gate_conv * self.conv_in(modulate(self.ln_conv(x), shift_conv, scale_conv))
+        x = x + gate_mlp * self.mlp(modulate(self.ln_mlp(x), shift_mlp, scale_mlp))
         return x
     
 
@@ -254,7 +254,7 @@ class FinalLayer(nn.Module):
             scale_mlp
         ) = self.adaLN_modulation(c).chunk(5, dim=-1)
 
-        x = x + gate_conv.unsqueeze(1) * self.conv_in(modulate(self.norm_in(x), shift_conv, scale_conv))
+        x = x + gate_conv * self.conv_in(modulate(self.norm_in(x), shift_conv, scale_conv))
 
         x = modulate(self.norm_out(x), shift_mlp, scale_mlp)
         x = x.transpose(1, -1)
@@ -356,13 +356,13 @@ class SimpleMLPAdaLN(nn.Module):
         """
         t = self.time_embed(t)
         c = self.cond_embed(c)
-        y = t + c
+        y = t + c.unsqueeze(1)
 
         x = self.proj_in(x)
         for block in self.res_blocks:
             x = block(x, y)
 
-        return self.final_layer(x, t)
+        return self.final_layer(x, y)
     
 
 class QuantizerEncoding(nn.Module):
@@ -415,7 +415,7 @@ class ProbGenerator(nn.Module):
         cond = self.quantizer_encoding(cond)
         cond = self.cond_downsampling(cond, mask)
 
-        t = torch.rand((cond.size(0), 1, 1), device=cond.device)
+        t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
         x0 = torch.randn_like(cond, device=cond.device) + cond
         xt = t * x1 + (1 - (1 - self.sigma_min) * t) * x0
         dx = (x1 - (1 - self.sigma_min) * x0) * mask
@@ -441,7 +441,7 @@ class ProbGenerator(nn.Module):
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
-            vt = self.denoiser(xt, ts[i-1].unsqueeze(0), spk)
+            vt = self.denoiser(xt, ts[i-1].unsqueeze(0).unsqueeze(1), spk)
             xt = xt + delta_t * vt
 
         return xt.transpose(1, -1)
