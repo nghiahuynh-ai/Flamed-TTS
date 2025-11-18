@@ -102,6 +102,7 @@ class Flamed(FlamedLightning):
         temp_denoiser: float = 0.3,
         nsteps_durgen: int = 64,
         nsteps_denoiser: int = 64,
+        guidance_scale: float | None = None,
         lexicon_path: str = None,
         cleaners: str = ['english_cleaners'],
         ):
@@ -154,6 +155,7 @@ class Flamed(FlamedLightning):
             temp_denoiser=temp_denoiser,
             nsteps_durgen=nsteps_durgen,
             nsteps_denoiser=nsteps_denoiser,
+            guidance_scale=guidance_scale,
         )
         
         wav = batch_outputs['wav'][0][0].detach().cpu().numpy()
@@ -177,6 +179,7 @@ class Flamed(FlamedLightning):
         temp_denoiser: float = 0.3,
         nsteps_durgen: int = 64,
         nsteps_denoiser: int = 64,
+        guidance_scale: float | None = None,
     ):
         start_time = time.time()
 
@@ -201,6 +204,7 @@ class Flamed(FlamedLightning):
             nfe=nsteps_denoiser,
             temperature=temp_denoiser,
             mask=~tgt_mask.unsqueeze(-1),
+            guidance_scale=guidance_scale,
         )
 
         outputs = {

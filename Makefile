@@ -28,6 +28,7 @@ NSTEPS_DURGEN ?= 64
 NSTEPS_DENOISER ?= 64
 TEMP_DURGEN ?= 0.3
 TEMP_DENOISER ?= 0.3
+GUIDANCE_SCALE ?= 3.5
 SKIP_EXISTING ?= true
 SYNTH_BATCH_SIZE ?= 4
 WEIGHTS_ONLY ?= true
@@ -94,6 +95,7 @@ synth:
 		--nsteps-denoiser $(NSTEPS_DENOISER) \
 		--temp-durgen $(TEMP_DURGEN) \
 		--temp-denoiser $(TEMP_DENOISER) \
+		$(if $(strip $(GUIDANCE_SCALE)),--guidance-scale $(GUIDANCE_SCALE),) \
 		--weights-only $(WEIGHTS_ONLY) \
 		--skip-existing $(SKIP_EXISTING) \
 		--batch-size $(SYNTH_BATCH_SIZE) \

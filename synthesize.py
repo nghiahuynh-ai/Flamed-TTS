@@ -186,6 +186,7 @@ def synthesize_with_prompts(
     nsteps_denoiser: int,
     temp_durgen: float,
     temp_denoiser: float,
+    guidance_scale: Optional[float],
 ):
     os.makedirs(output_dir, exist_ok=True)
     infer_times, output_durations = [], []
@@ -204,6 +205,7 @@ def synthesize_with_prompts(
             nsteps_denoiser=nsteps_denoiser,
             temp_durgen=temp_durgen,
             temp_denoiser=temp_denoiser,
+            guidance_scale=guidance_scale,
         )
 
         infer_times.append(results["time"])
@@ -230,6 +232,7 @@ def synthesize_with_metadata(
     temp_denoiser: float,
     skip_existing: bool,
     batch_size: int,
+    guidance_scale: Optional[float],
 ):
     with open(metadata_file, "r", encoding="utf-8") as fin:
         entries = [line.strip() for line in fin if line.strip()]
@@ -288,6 +291,7 @@ def synthesize_with_metadata(
             temp_denoiser=temp_denoiser,
             nsteps_durgen=nsteps_durgen,
             nsteps_denoiser=nsteps_denoiser,
+            guidance_scale=guidance_scale,
         )
         wav_batch = batch_outputs["wav"]
         per_sample_time = batch_outputs["time"] / len(batch)
@@ -339,6 +343,7 @@ def build_arg_parser():
     parser.add_argument("--nsteps-denoiser", type=int, default=64, help="Denoiser sampling steps.")
     parser.add_argument("--temp-durgen", type=float, default=0.3, help="Duration generator temperature.")
     parser.add_argument("--temp-denoiser", type=float, default=0.3, help="Denoiser temperature.")
+    parser.add_argument("--guidance-scale", type=float, default=None, help="Classifier-free guidance scale for the denoiser (default: use config value).")
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to run inference on.")
     parser.add_argument("--skip-existing", type=str2bool, default=True, help="Skip samples whose output files already exist (metadata mode).")
     parser.add_argument("--batch-size", type=int, default=4, help="Number of metadata samples to synthesize per batch.")
@@ -379,6 +384,7 @@ def main(args: Optional[argparse.Namespace] = None):
             temp_denoiser=args.temp_denoiser,
             skip_existing=args.skip_existing,
             batch_size=args.batch_size,
+            guidance_scale=args.guidance_scale,
         )
     else:
         rtf = synthesize_with_prompts(
@@ -393,6 +399,7 @@ def main(args: Optional[argparse.Namespace] = None):
             nsteps_denoiser=args.nsteps_denoiser,
             temp_durgen=args.temp_durgen,
             temp_denoiser=args.temp_denoiser,
+            guidance_scale=args.guidance_scale,
         )
 
     if rtf is not None:

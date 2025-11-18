@@ -7,7 +7,7 @@ n_layers: 4
 n_quantizers: 6
 sigma_min: 1e-6
 cfg_dropout_prob: 0.1
-guidance_scale: 1.5
+guidance_scale: 3.5
 convnext:
   kernel_size: 31
   stride: 1
