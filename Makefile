@@ -4,7 +4,7 @@ PYTHON ?= python
 
 # WandB / training defaults
 WANDB_PROJECT ?= flamed-tts-v3
-WANDB_RUN ?= forcing-cfg
+WANDB_RUN ?= forcing-cfg-distill
 WANDB_VERSION ?= local
 WANDB_MODE ?= online
 EXP_ROOT ?= experiments
