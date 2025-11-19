@@ -13,6 +13,10 @@ from transformers import get_cosine_schedule_with_warmup
 
 
 class FlamedLightning(LightningModule, ABC):
+    def __init__(self):
+        super().__init__()
+        self._last_logged_val_epoch = -1
+
     def setup_dataset_optimizer(
         self, 
         dataset_cfg: DictConfig, 
@@ -145,7 +149,10 @@ class FlamedLightning(LightningModule, ABC):
     def on_validation_batch_end(self, outputs, batch, batch_idx):
         if self.global_step < 1000:
             return
+        if self._last_logged_val_epoch == self.current_epoch:
+            return
         
+        self._last_logged_val_epoch = self.current_epoch
         phonemes, x_len, _, y_len, _, _, embs, prompts, spks = batch
 
         codec_encoder = FACodecEncoder.from_pretrained(self.cfg['codec_cfg']['encoder']).eval()
