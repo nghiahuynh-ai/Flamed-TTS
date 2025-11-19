@@ -160,17 +160,12 @@ class FlamedLightning(LightningModule, ABC):
             codec_encoder=codec_encoder,
             codec_decoder=codec_decoder,
         )
-        wav, prior_wav = results['wav'], results['prior_wav']
-
+        wav = results['wav']
         gt_wav = codec_decoder.inference(
             embs[0, : y_len[0].item(), :].unsqueeze(0).permute(0, 2, 1), 
             spks[0].unsqueeze(0)
         )
         del codec_encoder, codec_decoder
-
-        wandb.log({
-            "synthesize/val_prior": wandb.Audio(prior_wav, sample_rate=self.cfg['codec_cfg']['sr'])
-        }, step=self.global_step)
 
         wandb.log({
             "synthesize/val_synth": wandb.Audio(wav, sample_rate=self.cfg['codec_cfg']['sr'])
