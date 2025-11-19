@@ -4,10 +4,11 @@ import json
 import torch
 import random
 import numpy as np
+import multiprocessing as mp
 from typing import Any, Dict, Optional
+from flamed.text import text_to_sequence
 from lightning import LightningDataModule
 from torch.utils.data.dataloader import DataLoader
-from flamed.text import text_to_sequence
 
 
 class FlamedDataset(LightningDataModule):
@@ -31,12 +32,16 @@ class FlamedDataset(LightningDataModule):
         self.down_factors = config['down_factors']
         self.vocab_size = config['vocab_size']
         self.batch_size = config['batch_size']
-        self.num_workers = config['num_workers']
-        self.pin_memory = config['pin_memory']
+        self.num_workers = self._resolve_num_workers(config.get('num_workers', 'auto'))
+        self.pin_memory = self._resolve_pin_memory(config.get('pin_memory', 'auto'))
+        self.persistent_workers = self._resolve_persistent_workers(
+            config.get('persistent_workers', 'auto'),
+            self.num_workers,
+        )
+        self.mp_context = self._resolve_mp_context(config.get('multiprocessing_context', 'auto'))
         self.cleaners = config['cleaners']
         self.add_blank = config['add_blank']
         self.seed = config['seed']
-        self.device = config['device']
         self.sil_phones = config['sil_phones']
 
     def setup(self, stage: Optional[str] = None):  # pylint: disable=unused-argument
@@ -77,34 +82,30 @@ class FlamedDataset(LightningDataModule):
         )
 
     def train_dataloader(self):
-        return DataLoader(
-            dataset=self.trainset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-            shuffle=True,
-            collate_fn=TextCodesBatchCollate(
-                device=self.device,
-                prompt_max_len=self.prompt_dur_max * self.sampling_rate // np.prod(self.down_factors),
-                prompt_reduced_factor=self.prompt_reduced_factor,
-                vocab_size=self.vocab_size,
-            ),
-        )
+        return self._create_dataloader(self.trainset, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(
-            dataset=self.validset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
-            shuffle=False,
-            collate_fn=TextCodesBatchCollate(
-                device=self.device,
-                prompt_max_len=self.prompt_dur_max * self.sampling_rate // np.prod(self.down_factors),
-                prompt_reduced_factor=self.prompt_reduced_factor,
-                vocab_size=self.vocab_size,
-            ),
+        return self._create_dataloader(self.validset, shuffle=False)
+
+    def _create_dataloader(self, dataset, shuffle):
+        prompt_max_len = self.prompt_dur_max * self.sampling_rate // np.prod(self.down_factors)
+        collate = TextCodesBatchCollate(
+            prompt_max_len=prompt_max_len,
+            prompt_reduced_factor=self.prompt_reduced_factor,
+            vocab_size=self.vocab_size,
         )
+        loader_kwargs = {
+            "dataset": dataset,
+            "batch_size": self.batch_size,
+            "num_workers": self.num_workers,
+            "pin_memory": self.pin_memory,
+            "shuffle": shuffle,
+            "persistent_workers": self.persistent_workers if self.num_workers > 0 else False,
+            "collate_fn": collate,
+        }
+        if self.mp_context is not None and self.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = self.mp_context
+        return DataLoader(**loader_kwargs)
 
     def teardown(self, stage: Optional[str] = None):
         """Clean up after fit or test."""
@@ -117,6 +118,54 @@ class FlamedDataset(LightningDataModule):
     def load_state_dict(self, state_dict: Dict[str, Any]):
         """Things to do when loading checkpoint."""
         pass  # pylint: disable=unnecessary-pass
+
+    def _resolve_num_workers(self, value):
+        if value is None:
+            value = 'auto'
+        if isinstance(value, str):
+            if value.lower() == 'auto':
+                cpu_count = os.cpu_count() or 1
+                if cpu_count <= 2:
+                    return 1
+                return max(2, min(8, cpu_count // 2))
+            raise ValueError(f"Unsupported num_workers value: {value}")
+        return max(0, int(value))
+
+    def _resolve_pin_memory(self, value):
+        if value is None:
+            value = 'auto'
+        if isinstance(value, str):
+            if value.lower() == 'auto':
+                return torch.cuda.is_available()
+            raise ValueError(f"Unsupported pin_memory value: {value}")
+        return bool(value)
+
+    def _resolve_persistent_workers(self, value, num_workers):
+        if num_workers <= 0:
+            return False
+        if value is None:
+            value = 'auto'
+        if isinstance(value, str):
+            if value.lower() == 'auto':
+                return True
+            raise ValueError(f"Unsupported persistent_workers value: {value}")
+        return bool(value)
+
+    def _resolve_mp_context(self, value):
+        if value is None:
+            value = 'auto'
+        ctx_name = value
+        if isinstance(value, str):
+            if value.lower() == 'auto':
+                ctx_name = mp.get_start_method(allow_none=True)
+            else:
+                ctx_name = value.lower()
+        if ctx_name in (None, 'none'):
+            return None
+        try:
+            return mp.get_context(ctx_name)
+        except ValueError as err:
+            raise ValueError(f"Unsupported multiprocessing context: {ctx_name}") from err
 
 
 class TextCodesDataset(torch.utils.data.Dataset):
@@ -254,14 +303,12 @@ class TextCodesDataset(torch.utils.data.Dataset):
 
 class TextCodesBatchCollate:
     def __init__(
-        self, 
-        device,
+        self,
         prompt_max_len=800,
         prompt_reduced_factor=0.8,
         vocab_size=1024,
         ):
-        
-        self.device = device
+        # Keep tensors on CPU; Lightning moves batches to the target device.
         self.vocab_size = vocab_size
         self.prompt_max_len = prompt_max_len
         self.prompt_reduced_factor = prompt_reduced_factor
@@ -292,26 +339,11 @@ class TextCodesBatchCollate:
         n_codes = batch[0]["code"].shape[-2]
         emb_dim = batch[0]["emb"].shape[-1]
 
-        phonemes = torch.zeros(
-            (B, x_max_len), 
-            dtype=torch.long, device=self.device
-        )
-        codes = torch.zeros(
-            (B, n_codes, y_max_len), 
-            dtype=torch.long, device=self.device
-        ) + self.vocab_size
-        embs = torch.zeros(
-            (B, y_max_len, emb_dim), 
-            dtype=torch.float, device=self.device
-        )
-        phone_durations = torch.zeros(
-            (B, x_max_len), 
-            dtype=torch.long, device=self.device
-        )
-        sil_durations = torch.zeros(
-            (B, x_max_len), 
-            dtype=torch.long, device=self.device
-        )
+        phonemes = torch.zeros((B, x_max_len), dtype=torch.long)
+        codes = torch.zeros((B, n_codes, y_max_len), dtype=torch.long) + self.vocab_size
+        embs = torch.zeros((B, y_max_len, emb_dim), dtype=torch.float)
+        phone_durations = torch.zeros((B, x_max_len), dtype=torch.long)
+        sil_durations = torch.zeros((B, x_max_len), dtype=torch.long)
 
         prompts, spks, x_len, y_len = [], [], [], []
         for i, item in enumerate(batch):
@@ -334,8 +366,8 @@ class TextCodesBatchCollate:
             y_len.append(c_i.shape[-1])
             
         spks = torch.stack(spks)
-        x_len = torch.tensor(x_len, dtype=torch.int, device=self.device)
-        y_len = torch.tensor(y_len, dtype=torch.int, device=self.device)
+        x_len = torch.tensor(x_len, dtype=torch.int)
+        y_len = torch.tensor(y_len, dtype=torch.int)
         
         prompts = self._process_acoustic_prompt(prompts)
         del batch
