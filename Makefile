@@ -35,6 +35,8 @@ GUIDANCE_SCALE ?= 3.5
 SKIP_EXISTING ?= true
 SYNTH_BATCH_SIZE ?= 4
 WEIGHTS_ONLY ?= true
+
+# Avg Checkpoints
 AVG_CKPTS ?=
 AVG_OUTPUT ?= averaged.ckpt
 
