@@ -483,21 +483,58 @@ class ProbGenerator(nn.Module):
             'anchor_loss': anchor_loss,
         }
 
-    def sample(self, cond, spk, mask, nfe=4, temperature=1.0, guidance_scale=None):
+    def sample(
+        self,
+        cond,
+        spk,
+        mask,
+        nfe=64,
+        temperature=1.0,
+        method='euler',
+        guidance_scale=None,
+        n_sampling_steps_min=None,
+        n_sampling_steps_max=None,
+    ):
         cond = self.quantizer_encoding(cond)
         cond = self.cond_downsampling(cond, mask)
-        b, l, _ = cond.shape
 
         if guidance_scale is None:
             guidance_scale = self.guidance_scale
         else:
             guidance_scale = float(guidance_scale)
 
-        ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
-        xt = torch.randn((b, l, self.target_dim)).to(cond.device) * temperature + cond
-        delta_t = 1 / nfe
+        method = (method or 'euler').lower()
         use_cfg = self.cfg_dropout_prob > 0 and not math.isclose(guidance_scale, 1.0)
         spk_uncond = torch.zeros_like(spk) if use_cfg else None
+
+        if method == 'forcing':
+            return self._sample_forcing(
+                cond,
+                spk,
+                mask,
+                temperature=temperature,
+                guidance_scale=guidance_scale,
+                spk_uncond=spk_uncond,
+                n_sampling_steps_min=n_sampling_steps_min,
+                n_sampling_steps_max=n_sampling_steps_max,
+            )
+        if method == 'euler':
+            return self._sample_euler(
+                cond,
+                spk,
+                mask,
+                nfe=nfe,
+                temperature=temperature,
+                guidance_scale=guidance_scale,
+                spk_uncond=spk_uncond,
+            )
+        raise ValueError(f"Unsupported sampling method '{method}'")
+
+    def _sample_euler(self, cond, spk, mask, nfe, temperature, guidance_scale, spk_uncond=None):
+        b, l, _ = cond.shape
+        ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
+        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
             vt = self._guided_velocity(
@@ -511,3 +548,72 @@ class ProbGenerator(nn.Module):
             xt = xt + delta_t * vt
 
         return xt.transpose(1, -1)
+
+    def _sample_forcing(
+        self,
+        cond,
+        spk,
+        mask,
+        temperature,
+        guidance_scale,
+        spk_uncond=None,
+        n_sampling_steps_min=None,
+        n_sampling_steps_max=None,
+    ):
+        if n_sampling_steps_min is None or n_sampling_steps_max is None:
+            raise ValueError("n_sampling_steps_min and n_sampling_steps_max must be provided for forcing sampling")
+
+        n_sampling_steps_min = int(n_sampling_steps_min)
+        n_sampling_steps_max = int(n_sampling_steps_max)
+
+        if n_sampling_steps_min <= 0 or n_sampling_steps_max <= 0:
+            raise ValueError("n_sampling_steps_min and n_sampling_steps_max must be positive integers")
+        if n_sampling_steps_min > n_sampling_steps_max:
+            raise ValueError("n_sampling_steps_min cannot be greater than n_sampling_steps_max")
+
+        b, l, _ = cond.shape
+        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        step_schedule = self._build_forcing_schedule(l, n_sampling_steps_min, n_sampling_steps_max, cond.device)
+        total_steps = int(step_schedule.max().item())
+        ts = torch.linspace(0, 1, total_steps + 1, device=cond.device)
+        delta_t = 1 / total_steps
+
+        for step_idx in range(1, total_steps + 1):
+            step_mask = (step_idx <= step_schedule).view(1, l, 1)
+            if mask is None:
+                effective_mask = step_mask
+            elif mask.dtype == torch.bool:
+                effective_mask = mask & step_mask
+            else:
+                effective_mask = mask * step_mask.to(mask.dtype)
+
+            vt = self._guided_velocity(
+                xt,
+                ts[step_idx - 1].unsqueeze(0).unsqueeze(1),
+                spk,
+                spk_uncond=spk_uncond,
+                mask=effective_mask,
+                guidance_scale=guidance_scale,
+            )
+            xt = xt + delta_t * vt
+
+        return xt.transpose(1, -1)
+
+    def _build_forcing_schedule(self, num_latents, steps_min, steps_max, device):
+        if num_latents <= 0:
+            raise ValueError("Number of latents must be positive")
+
+        if num_latents == 1:
+            return torch.tensor([max(steps_min, steps_max)], device=device, dtype=torch.long)
+
+        schedule = torch.linspace(float(steps_min), float(steps_max), steps=num_latents, device=device)
+        schedule = torch.round(schedule).to(torch.long)
+        schedule[0] = steps_min
+        schedule[-1] = steps_max
+
+        for idx in range(1, num_latents):
+            if schedule[idx] < schedule[idx - 1]:
+                schedule[idx] = schedule[idx - 1]
+
+        schedule = torch.clamp(schedule, min=1)
+        return schedule

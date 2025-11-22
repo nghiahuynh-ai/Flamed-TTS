@@ -187,6 +187,9 @@ def synthesize_with_prompts(
     temp_durgen: float,
     temp_denoiser: float,
     guidance_scale: Optional[float],
+    denoiser_method: str,
+    forcing_steps_min: Optional[int],
+    forcing_steps_max: Optional[int],
 ):
     os.makedirs(output_dir, exist_ok=True)
     infer_times, output_durations = [], []
@@ -206,6 +209,9 @@ def synthesize_with_prompts(
             temp_durgen=temp_durgen,
             temp_denoiser=temp_denoiser,
             guidance_scale=guidance_scale,
+            denoiser_method=denoiser_method,
+            forcing_steps_min=forcing_steps_min,
+            forcing_steps_max=forcing_steps_max,
         )
 
         infer_times.append(results["time"])
@@ -233,6 +239,9 @@ def synthesize_with_metadata(
     skip_existing: bool,
     batch_size: int,
     guidance_scale: Optional[float],
+    denoiser_method: str,
+    forcing_steps_min: Optional[int],
+    forcing_steps_max: Optional[int],
 ):
     with open(metadata_file, "r", encoding="utf-8") as fin:
         entries = [line.strip() for line in fin if line.strip()]
@@ -292,6 +301,9 @@ def synthesize_with_metadata(
             nsteps_durgen=nsteps_durgen,
             nsteps_denoiser=nsteps_denoiser,
             guidance_scale=guidance_scale,
+            denoiser_method=denoiser_method,
+            forcing_steps_min=forcing_steps_min,
+            forcing_steps_max=forcing_steps_max,
         )
         wav_batch = batch_outputs["wav"]
         per_sample_time = batch_outputs["time"] / len(batch)
@@ -327,6 +339,13 @@ def _validate_args(args: argparse.Namespace):
             raise ValueError(f"Metadata file not found: {args.metadata_file}")
         if args.batch_size < 1:
             raise ValueError("--batch-size must be >= 1.")
+    if args.denoiser_method == "forcing":
+        if args.forcing_steps_min is None or args.forcing_steps_max is None:
+            raise ValueError("--forcing-steps-min and --forcing-steps-max are required when --denoiser-method forcing is selected.")
+        if args.forcing_steps_min <= 0 or args.forcing_steps_max <= 0:
+            raise ValueError("--forcing-steps-min and --forcing-steps-max must be positive integers.")
+        if args.forcing_steps_min > args.forcing_steps_max:
+            raise ValueError("--forcing-steps-min cannot exceed --forcing-steps-max.")
         
 
 def build_arg_parser():
@@ -347,6 +366,9 @@ def build_arg_parser():
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to run inference on.")
     parser.add_argument("--skip-existing", type=str2bool, default=True, help="Skip samples whose output files already exist (metadata mode).")
     parser.add_argument("--batch-size", type=int, default=4, help="Number of metadata samples to synthesize per batch.")
+    parser.add_argument("--denoiser-method", choices=["euler", "forcing"], default="euler", help="Integrator to sample latents (euler or forcing).")
+    parser.add_argument("--forcing-steps-min", type=int, default=None, help="Minimum steps for the earliest latent when using forcing.")
+    parser.add_argument("--forcing-steps-max", type=int, default=None, help="Maximum steps for the latest latent when using forcing.")
     return parser
 
 
@@ -385,6 +407,9 @@ def main(args: Optional[argparse.Namespace] = None):
             skip_existing=args.skip_existing,
             batch_size=args.batch_size,
             guidance_scale=args.guidance_scale,
+            denoiser_method=args.denoiser_method,
+            forcing_steps_min=args.forcing_steps_min,
+            forcing_steps_max=args.forcing_steps_max,
         )
     else:
         rtf = synthesize_with_prompts(
@@ -400,6 +425,9 @@ def main(args: Optional[argparse.Namespace] = None):
             temp_durgen=args.temp_durgen,
             temp_denoiser=args.temp_denoiser,
             guidance_scale=args.guidance_scale,
+            denoiser_method=args.denoiser_method,
+            forcing_steps_min=args.forcing_steps_min,
+            forcing_steps_max=args.forcing_steps_max,
         )
 
     if rtf is not None:

@@ -26,6 +26,9 @@ OUTPUT_DIR ?= outputs
 SYNTH_DEVICE ?= cuda:0
 NSTEPS_DURGEN ?= 64
 NSTEPS_DENOISER ?= 64
+DENOISER_METHOD ?= euler
+FORCING_STEPS_MIN ?=
+FORCING_STEPS_MAX ?=
 TEMP_DURGEN ?= 0.3
 TEMP_DENOISER ?= 0.3
 GUIDANCE_SCALE ?= 3.5
@@ -95,6 +98,9 @@ synth:
 		--nsteps-denoiser $(NSTEPS_DENOISER) \
 		--temp-durgen $(TEMP_DURGEN) \
 		--temp-denoiser $(TEMP_DENOISER) \
+		--denoiser-method "$(DENOISER_METHOD)" \
+		$(if $(strip $(FORCING_STEPS_MIN)),--forcing-steps-min $(FORCING_STEPS_MIN),) \
+		$(if $(strip $(FORCING_STEPS_MAX)),--forcing-steps-max $(FORCING_STEPS_MAX),) \
 		$(if $(strip $(GUIDANCE_SCALE)),--guidance-scale $(GUIDANCE_SCALE),) \
 		--weights-only $(WEIGHTS_ONLY) \
 		--skip-existing $(SKIP_EXISTING) \

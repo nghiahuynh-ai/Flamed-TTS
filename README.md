@@ -52,44 +52,50 @@ flamed/
 
 ### Inference sample(s) with given content and speech prompt(s)
 
-Script `synthesize.py` provides end-to-end pipeline for generaing a single or multiple samples with an identical content and serveral speech prompts. Please follow the CLI:
+Use the `make synth` target, which wraps `synthesize.py` and validates all arguments for you. Supply the mandatory variables directly on the command line:
 
 ```bash
-python synthesize.py \
-	--ckpt-path "path/to/ckpt.pt" \
- 	--cfg-path "path/to/config.yaml" \
-	--text "content to be synthesized" \
-	--prompt-dir "path/to/folder/of/prompt/audio/files" \
-	--prompt-list "prompt_1.wav prompt_2.wav prompt_3.wav" \ # list of prompt filenames to be synthesized
-	--nsteps-durgen "16" \ # number of sampling steps to generate both phoneme durations and silences, 64 as default
-	--nsteps-denoiser "128" \ # number of sampling steps to generate latent representations of speech, 64 as default
-	--temp-durgen "1.0" \ # nosie scaling factor to generate both phoneme durations and silences, 0.3 as default
-	--temp-denoiser "0.3" \ # nosie scaling factor to generate latent representations of speech, 0.3 as default
-	--output-dir "path/to/dir/for/output/audio/files" \
-	--device "cuda:0" # cuda:0 as default
+make synth \
+	SYNTH_CKPT=path/to/ckpt.pt \
+	SYNTH_CFG=configs/prob.yaml \
+	PROMPT_DIR=assets/prompts \
+	PROMPT_LIST="prompt_1.wav prompt_2.wav prompt_3.wav" \
+	SYNTH_TEXT="content to be synthesized" \
+	OUTPUT_DIR=outputs \
+	SYNTH_DEVICE=cuda:0 \
+	NSTEPS_DURGEN=16 \
+	NSTEPS_DENOISER=128 \
+	TEMP_DURGEN=1.0 \
+	TEMP_DENOISER=0.3 \
+	GUIDANCE_SCALE=3.5
 ```
 
-### Inference sample using metadata file
-Script `synthesize_via_metadata.py` provides end-to-end pipeline for generating multiple samples using metadata file. You need to prepare the metadata file (`.txt`), whose each line is formated as follows:
+- `PROMPT_LIST` is space-separated within quotes and every entry must exist under `PROMPT_DIR` (absolute paths also work).
+- Set `WEIGHTS_ONLY=false` if your checkpoint is a full Lightning snapshot instead of the default `weights_only` format.
+- Leave `DENOISER_METHOD=euler` for the original flow-matching sampler, or set `DENOISER_METHOD=forcing` with matching `FORCING_STEPS_MIN`/`FORCING_STEPS_MAX` to enable cascaded updates for later latents.
 
-```
-<target_filename.wav>|<prompt_filename.wav>|<content_to_be_synthesized>
-Example: 4507-16021-0037.wav|4507-16021-0049.wav|there it clothes itself in word masks in metaphor rags\n
-```
-To generate multiple samples using metadata file, please follow the CLI:
+### Inference using a metadata file
+
+Batch synthesis also goes through `make synth`, but you pass `METADATA_FILE` instead of `PROMPT_LIST`/`SYNTH_TEXT`. Each metadata line follows `target_filename.wav|prompt_filename.wav|content_to_be_synthesized`.
+
 ```bash
-python synthesize_via_metadata.py \
-	--text-file "path/to/metadata.txt"\
-	--ckpt-path "path/to/ckpt.pt" \
- 	--cfg-path "path/to/config.yaml" \
-	--prompt-dir "path/to/folder/of/prompt/audio/files" \
-	--nsteps-durgen "16" \ 
-	--nsteps-denoiser "128" \
-	--temp-durgen "1.0" \ 
-	--temp-denoiser "0.3" \
-	--output-dir "path/to/dir/for/output/audio/files" \
-	--device "cuda:0"
+make synth \
+	SYNTH_CKPT=path/to/ckpt.pt \
+	SYNTH_CFG=configs/prob.yaml \
+	PROMPT_DIR=assets/prompts \
+	METADATA_FILE=lists/metadata.txt \
+	OUTPUT_DIR=outputs \
+	SYNTH_DEVICE=cuda:0 \
+	NSTEPS_DURGEN=64 \
+	NSTEPS_DENOISER=64 \
+	TEMP_DURGEN=0.3 \
+	TEMP_DENOISER=0.3 \
+	GUIDANCE_SCALE=3.5 \
+	SKIP_EXISTING=true \
+	SYNTH_BATCH_SIZE=4
 ```
+
+Optional knobs from the Makefile include `SKIP_EXISTING` to avoid re-synthesizing files that are already present, `SYNTH_BATCH_SIZE` to control how many metadata entries are processed per forward pass, and the same `DENOISER_METHOD`/forcing step overrides described above.
 
 ## 🔄 Training Flamed-TTS from scratch
 
