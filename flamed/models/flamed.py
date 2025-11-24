@@ -215,6 +215,7 @@ class Flamed(FlamedLightning):
             nfe=nsteps_denoiser,
             temperature=temp_denoiser,
             mask=~tgt_mask.unsqueeze(-1),
+            prior_logits=prior_logits,
             guidance_scale=guidance_scale,
             method=denoiser_method,
             n_sampling_steps_min=forcing_steps_min,
