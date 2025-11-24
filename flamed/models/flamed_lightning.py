@@ -149,7 +149,7 @@ class FlamedLightning(LightningModule, ABC):
 
     @rank_zero_only
     def on_validation_batch_end(self, outputs, batch, batch_idx):
-        if self.global_step < 1000:
+        if self.trainer and self.trainer.sanity_checking:
             return
         if self._last_logged_val_epoch == self.current_epoch:
             return
@@ -157,29 +157,31 @@ class FlamedLightning(LightningModule, ABC):
         self._last_logged_val_epoch = self.current_epoch
         phonemes, x_len, _, y_len, _, _, embs, prompts, spks = batch
 
-        codec_encoder = FACodecEncoder.from_pretrained(self.cfg['codec_cfg']['encoder']).eval()
-        codec_decoder = FACodecDecoder.from_pretrained(self.cfg['codec_cfg']['decoder']).eval()
-        codec_encoder.to(self.cfg['codec_cfg']['device'])
-        codec_decoder.to(self.cfg['codec_cfg']['device'])
+        with torch.inference_mode():
+            codec_encoder = FACodecEncoder.from_pretrained(self.cfg['codec_cfg']['encoder']).eval()
+            codec_decoder = FACodecDecoder.from_pretrained(self.cfg['codec_cfg']['decoder']).eval()
+            codec_encoder.to(self.cfg['codec_cfg']['device'])
+            codec_decoder.to(self.cfg['codec_cfg']['device'])
 
-        results = self.sample(
-            prompt_processed=prompts[0],
-            phonemes=phonemes[0, : x_len[0].item()],
-            timbre=spks[0],
-            codec_encoder=codec_encoder,
-            codec_decoder=codec_decoder,
-        )
-        wav = results['wav']
-        gt_wav = codec_decoder.inference(
-            embs[0, : y_len[0].item(), :].unsqueeze(0).permute(0, 2, 1), 
-            spks[0].unsqueeze(0)
-        )
-        del codec_encoder, codec_decoder
+            results = self.sample(
+                prompt_processed=prompts[0],
+                phonemes=phonemes[0, : x_len[0].item()],
+                timbre=spks[0],
+                codec_encoder=codec_encoder,
+                codec_decoder=codec_decoder,
+            )
+            wav = results['wav']
+            gt_wav = codec_decoder.inference(
+                embs[0, : y_len[0].item(), :].unsqueeze(0).permute(0, 2, 1), 
+                spks[0].unsqueeze(0)
+            )
+            del codec_encoder, codec_decoder
 
-        wandb.log({
+        logger = getattr(self.logger, "experiment", wandb)
+        logger.log({
             "synthesize/val_synth": wandb.Audio(wav, sample_rate=self.cfg['codec_cfg']['sr'])
-        }, step=self.global_step)
+        }, step=int(self.global_step))
         
-        wandb.log({
+        logger.log({
             "synthesize/val_gt": wandb.Audio(gt_wav[0][0].cpu().numpy(), sample_rate=self.cfg['codec_cfg']['sr'])
-        }, step=self.global_step)
+        }, step=int(self.global_step))
