@@ -59,8 +59,12 @@ class PVA(nn.Module):
         max_tgt_len,
         phone_duration,
         sil_duration,
+        training=True,
     ):
-        t = torch.rand((x.shape[0], 1)).to(x.device)
+        if training:
+            t = torch.rand((x.shape[0], 1)).to(x.device)
+        else:
+            t = torch.zeros((x.shape[0], 1)).to(x.device)
 
         dur_1 = torch.log(phone_duration.float() + 1)
         dur_0 = torch.randn_like(dur_1)

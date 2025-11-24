@@ -78,6 +78,7 @@ class FlamedLightning(LightningModule, ABC):
             embs,
             prompts,
             spks,
+            training=True,
         )
         
         total_loss, logging_data = 0, {}
@@ -117,6 +118,7 @@ class FlamedLightning(LightningModule, ABC):
             embs,
             prompts,
             spks,
+            training=False,
         )
         
         total_loss, logging_data = 0, {}

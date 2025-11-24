@@ -464,11 +464,14 @@ class ProbGenerator(nn.Module):
 
         return vt
 
-    def compute_loss(self, x1, cond, spk, mask):
+    def compute_loss(self, x1, cond, spk, mask, training=True):
         cond = self.quantizer_encoding(cond)
         cond = self.cond_downsampling(cond, mask)
 
-        t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
+        if training:
+            t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
+        else:
+            t = torch.zeros((cond.size(0), cond.size(1), 1), device=cond.device)
         x0 = torch.randn_like(cond, device=cond.device) + cond
         xt = t * x1 + (1 - (1 - self.sigma_min) * t) * x0
 

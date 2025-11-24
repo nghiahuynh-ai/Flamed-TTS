@@ -73,6 +73,7 @@ class PriorGenerator(nn.Module):
         sil_durations,
         prompts,
         prompts_len,
+        training=True,
         ):
         
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
@@ -90,6 +91,7 @@ class PriorGenerator(nn.Module):
             max_tgt_len,
             phone_durations,
             sil_durations,
+            training=training,
         )
         output = self.bridge(output)
 

@@ -54,6 +54,7 @@ class Flamed(FlamedLightning):
         embs,
         prompts,
         spks,
+        training=True,
         ):
         
         # Forward & compute losses of codes generator
@@ -72,6 +73,7 @@ class Flamed(FlamedLightning):
             sil_durations=sil_durations,
             prompts=prompts,
             prompts_len=prompts.size(-1),
+            training=training,
         )
         
         # Forward & compute losses of flow matching
@@ -80,6 +82,7 @@ class Flamed(FlamedLightning):
             cond=prior_embs,
             spk=spks,
             mask=~tgt_masks.unsqueeze(-1),
+            training=training,
         )
         
         return ar_losses | prob_losses
