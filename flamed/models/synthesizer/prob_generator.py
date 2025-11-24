@@ -412,7 +412,6 @@ class ProbGenerator(nn.Module):
         )
         self.cfg_dropout_prob = float(config.get('cfg_dropout_prob', 0.0))
         self.guidance_scale = float(config.get('guidance_scale', 1.0))
-        self.scheduler = str(config.get('scheduler', 'partial')).lower()
 
     def _apply_cfg_dropout(self, spk):
         if not self.training or self.cfg_dropout_prob <= 0:
@@ -491,11 +490,7 @@ class ProbGenerator(nn.Module):
         mask,
         nfe=64,
         temperature=1.0,
-        method='euler',
-        prior_logits=None,
         guidance_scale=None,
-        n_sampling_steps_min=None,
-        n_sampling_steps_max=None,
     ):
         cond = self.quantizer_encoding(cond)
         cond = self.cond_downsampling(cond, mask)
@@ -505,34 +500,18 @@ class ProbGenerator(nn.Module):
         else:
             guidance_scale = float(guidance_scale)
 
-        method = (method or 'euler').lower()
         use_cfg = self.cfg_dropout_prob > 0 and not math.isclose(guidance_scale, 1.0)
         spk_uncond = torch.zeros_like(spk) if use_cfg else None
 
-        if method == 'forcing':
-            return self._sample_forcing(
-                cond,
-                spk,
-                mask,
-                temperature=temperature,
-                guidance_scale=guidance_scale,
-                spk_uncond=spk_uncond,
-                n_sampling_steps_min=n_sampling_steps_min,
-                n_sampling_steps_max=n_sampling_steps_max,
-                prior_logits=prior_logits,
-            )
-        if method == 'euler':
-            return self._sample_euler(
-                cond,
-                spk,
-                mask,
-                nfe=nfe,
-                temperature=temperature,
-                guidance_scale=guidance_scale,
-                spk_uncond=spk_uncond,
-                prior_logits=prior_logits,
-            )
-        raise ValueError(f"Unsupported sampling method '{method}'")
+        return self._sample_euler(
+            cond,
+            spk,
+            mask,
+            nfe=nfe,
+            temperature=temperature,
+            guidance_scale=guidance_scale,
+            spk_uncond=spk_uncond,
+        )
 
     def _sample_euler(
             self, 
@@ -543,17 +522,13 @@ class ProbGenerator(nn.Module):
             temperature=None, 
             guidance_scale=None, 
             spk_uncond=None,
-            prior_logits=None
     ):
+        if temperature is None:
+            raise ValueError("`temperature` must be provided for euler sampling.")
+
         b, l, _ = cond.shape
         ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
-        use_prior_temperature = self.scheduler == "partial" and prior_logits is not None
-        if use_prior_temperature:
-            temperature = 1 - self.mean_confidence(prior_logits)
-        elif temperature is None:
-            raise ValueError("`temperature` must be provided when SCHEDULER is not 'partial' or prior_logits are missing")
-
-        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature.unsqueeze(2) + cond
+        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
@@ -568,76 +543,6 @@ class ProbGenerator(nn.Module):
             xt = xt + delta_t * vt
 
         return xt.transpose(1, -1)
-
-    def _sample_forcing(
-        self,
-        cond,
-        spk,
-        mask,
-        temperature=None,
-        guidance_scale=None,
-        spk_uncond=None,
-        n_sampling_steps_min=None,
-        n_sampling_steps_max=None,
-        prior_logits=None,
-    ):
-        if n_sampling_steps_min is None or n_sampling_steps_max is None:
-            raise ValueError("n_sampling_steps_min and n_sampling_steps_max must be provided for forcing sampling")
-
-        n_sampling_steps_min = int(n_sampling_steps_min)
-        n_sampling_steps_max = int(n_sampling_steps_max)
-
-        if n_sampling_steps_min <= 0 or n_sampling_steps_max <= 0:
-            raise ValueError("n_sampling_steps_min and n_sampling_steps_max must be positive integers")
-        if n_sampling_steps_min > n_sampling_steps_max:
-            raise ValueError("n_sampling_steps_min cannot be greater than n_sampling_steps_max")
-
-        b, l, _ = cond.shape
-        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
-        step_schedule = self._build_forcing_schedule(l, n_sampling_steps_min, n_sampling_steps_max, cond.device)
-        total_steps = int(step_schedule.max().item())
-        ts = torch.linspace(0, 1, total_steps + 1, device=cond.device)
-        delta_t = 1 / total_steps
-
-        for step_idx in range(1, total_steps + 1):
-            step_mask = (step_idx <= step_schedule).view(1, l, 1)
-            if mask is None:
-                effective_mask = step_mask
-            elif mask.dtype == torch.bool:
-                effective_mask = mask & step_mask
-            else:
-                effective_mask = mask * step_mask.to(mask.dtype)
-
-            vt = self._guided_velocity(
-                xt,
-                ts[step_idx - 1].unsqueeze(0).unsqueeze(1),
-                spk,
-                spk_uncond=spk_uncond,
-                mask=effective_mask,
-                guidance_scale=guidance_scale,
-            )
-            xt = xt + delta_t * vt
-
-        return xt.transpose(1, -1)
-
-    def _build_forcing_schedule(self, num_latents, steps_min, steps_max, device):
-        if num_latents <= 0:
-            raise ValueError("Number of latents must be positive")
-
-        if num_latents == 1:
-            return torch.tensor([max(steps_min, steps_max)], device=device, dtype=torch.long)
-
-        schedule = torch.linspace(float(steps_min), float(steps_max), steps=num_latents, device=device)
-        schedule = torch.round(schedule).to(torch.long)
-        schedule[0] = steps_min
-        schedule[-1] = steps_max
-
-        for idx in range(1, num_latents):
-            if schedule[idx] < schedule[idx - 1]:
-                schedule[idx] = schedule[idx - 1]
-
-        schedule = torch.clamp(schedule, min=1)
-        return schedule
 
     def mean_confidence(self, logits: torch.Tensor) -> torch.Tensor:
         """

@@ -100,9 +100,6 @@ class Flamed(FlamedLightning):
         temp_denoiser: float = 0.3,
         nsteps_durgen: int = 64,
         nsteps_denoiser: int = 64,
-        denoiser_method: str = 'euler',
-        forcing_steps_min: int | None = None,
-        forcing_steps_max: int | None = None,
         guidance_scale: float | None = None,
         lexicon_path: str = None,
         cleaners: str = ['english_cleaners'],
@@ -156,9 +153,6 @@ class Flamed(FlamedLightning):
             temp_denoiser=temp_denoiser,
             nsteps_durgen=nsteps_durgen,
             nsteps_denoiser=nsteps_denoiser,
-            denoiser_method=denoiser_method,
-            forcing_steps_min=forcing_steps_min,
-            forcing_steps_max=forcing_steps_max,
             guidance_scale=guidance_scale,
         )
         
@@ -183,9 +177,6 @@ class Flamed(FlamedLightning):
         temp_denoiser: float = 0.3,
         nsteps_durgen: int = 64,
         nsteps_denoiser: int = 64,
-        denoiser_method: str = 'euler',
-        forcing_steps_min: int | None = None,
-        forcing_steps_max: int | None = None,
         guidance_scale: float | None = None,
     ):
         start_time = time.time()
@@ -205,21 +196,13 @@ class Flamed(FlamedLightning):
             temperature=temp_durgen,
         )
 
-        if denoiser_method == 'forcing':
-            if forcing_steps_min is None or forcing_steps_max is None:
-                raise ValueError('forcing_steps_min and forcing_steps_max must be provided when denoiser_method="forcing".')
-
         latents = self.prob_generator.sample(
             cond=prior_emb_cond,
             spk=timbres,
             nfe=nsteps_denoiser,
             temperature=temp_denoiser,
             mask=~tgt_mask.unsqueeze(-1),
-            prior_logits=prior_logits,
             guidance_scale=guidance_scale,
-            method=denoiser_method,
-            n_sampling_steps_min=forcing_steps_min,
-            n_sampling_steps_max=forcing_steps_max,
         )
 
         outputs = {

@@ -26,12 +26,8 @@ OUTPUT_DIR ?= ../outputs-ckpt30-34/5s
 SYNTH_DEVICE ?= cuda:0
 NSTEPS_DURGEN ?= 8
 NSTEPS_DENOISER ?= 128
-DENOISER_METHOD ?= euler
-FORCING_STEPS_MIN ?= 32
-FORCING_STEPS_MAX ?= 128
 TEMP_DURGEN ?= 0.3
 TEMP_DENOISER ?= 0.3
-SCHEDULER ?= partial
 GUIDANCE_SCALE ?= 3.5
 SKIP_EXISTING ?= true
 SYNTH_BATCH_SIZE ?= 1
@@ -96,15 +92,11 @@ synth:
 		--cfg-path "$(SYNTH_CFG)" \
 		--prompt-dir "$(PROMPT_DIR)" \
 		--output-dir "$(OUTPUT_DIR)" \
-		--scheduler "$(SCHEDULER)" \
 		--device "$(SYNTH_DEVICE)" \
 		--nsteps-durgen $(NSTEPS_DURGEN) \
 		--nsteps-denoiser $(NSTEPS_DENOISER) \
 		--temp-durgen $(TEMP_DURGEN) \
 		--temp-denoiser $(TEMP_DENOISER) \
-		--denoiser-method "$(DENOISER_METHOD)" \
-		$(if $(strip $(FORCING_STEPS_MIN)),--forcing-steps-min $(FORCING_STEPS_MIN),) \
-		$(if $(strip $(FORCING_STEPS_MAX)),--forcing-steps-max $(FORCING_STEPS_MAX),) \
 		$(if $(strip $(GUIDANCE_SCALE)),--guidance-scale $(GUIDANCE_SCALE),) \
 		--weights-only $(WEIGHTS_ONLY) \
 		--skip-existing $(SKIP_EXISTING) \
