@@ -412,6 +412,7 @@ class ProbGenerator(nn.Module):
         )
         self.cfg_dropout_prob = float(config.get('cfg_dropout_prob', 0.0))
         self.guidance_scale = float(config.get('guidance_scale', 1.0))
+        self.scheduler = str(config.get('scheduler', 'partial')).lower()
 
     def _apply_cfg_dropout(self, spk):
         if not self.training or self.cfg_dropout_prob <= 0:
@@ -544,16 +545,15 @@ class ProbGenerator(nn.Module):
             spk_uncond=None,
             prior_logits=None
     ):
-        if (temperature and prior_logits) or (not temperature and not prior_logits):
-            raise ValueError('`temperature` and `prior_logits` are exclusive! Either `temperature` or `prior_logits` must be not None')
-        
         b, l, _ = cond.shape
         ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
-        if prior_logits:
+        use_prior_temperature = self.scheduler == "partial" and prior_logits is not None
+        if use_prior_temperature:
             temperature = self.mean_confidence(prior_logits)
-            xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
-        else:
-            xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        elif temperature is None:
+            raise ValueError("`temperature` must be provided when SCHEDULER is not 'partial' or prior_logits are missing")
+
+        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):

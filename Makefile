@@ -31,7 +31,8 @@ FORCING_STEPS_MIN ?= 32
 FORCING_STEPS_MAX ?= 128
 TEMP_DURGEN ?= 0.3
 TEMP_DENOISER ?= 0.3
-GUIDANCE_SCALE ?= 11.5
+SCHEDULER ?= partial
+GUIDANCE_SCALE ?= 3.5
 SKIP_EXISTING ?= true
 SYNTH_BATCH_SIZE ?= 1
 WEIGHTS_ONLY ?= true
@@ -95,6 +96,7 @@ synth:
 		--cfg-path "$(SYNTH_CFG)" \
 		--prompt-dir "$(PROMPT_DIR)" \
 		--output-dir "$(OUTPUT_DIR)" \
+		--scheduler "$(SCHEDULER)" \
 		--device "$(SYNTH_DEVICE)" \
 		--nsteps-durgen $(NSTEPS_DURGEN) \
 		--nsteps-denoiser $(NSTEPS_DENOISER) \

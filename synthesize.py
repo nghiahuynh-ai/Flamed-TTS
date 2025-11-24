@@ -78,10 +78,12 @@ def get_codec(device: torch.device):
     return fa_encoder, fa_decoder
 
 
-def prepare_model(cfg_path: str, ckpt_path: str, device: torch.device, weights_only: bool):
+def prepare_model(cfg_path: str, ckpt_path: str, device: torch.device, weights_only: bool, scheduler: str | None = None):
     cfg = OmegaConf.load(cfg_path)
     cfg["prob_generator"]["device"] = str(device)
     cfg["prior_generator"]["device"] = str(device)
+    if scheduler is not None:
+        cfg["prob_generator"]["scheduler"] = scheduler
 
     model = Flamed.from_pretrained(
         cfg=cfg,
@@ -369,6 +371,7 @@ def build_arg_parser():
     parser.add_argument("--denoiser-method", choices=["euler", "forcing"], default="euler", help="Integrator to sample latents (euler or forcing).")
     parser.add_argument("--forcing-steps-min", type=int, default=None, help="Minimum steps for the earliest latent when using forcing.")
     parser.add_argument("--forcing-steps-max", type=int, default=None, help="Maximum steps for the latest latent when using forcing.")
+    parser.add_argument("--scheduler", type=str, default=None, help="Scheduler choice forwarded to prob_generator (e.g., partial).")
     return parser
 
 
@@ -389,7 +392,7 @@ def main(args: Optional[argparse.Namespace] = None):
 
     device = resolve_device(args.device)
     codec_encoder, codec_decoder = get_codec(device)
-    model = prepare_model(args.cfg_path, args.ckpt_path, device, args.weights_only)
+    model = prepare_model(args.cfg_path, args.ckpt_path, device, args.weights_only, scheduler=args.scheduler)
 
     rtf = None
     if args.metadata_file:
