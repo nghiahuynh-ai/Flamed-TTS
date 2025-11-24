@@ -23,8 +23,6 @@ class Flamed(FlamedLightning):
     
     @classmethod
     def from_pretrained(cls, cfg, ckpt_path, device, weights_only=False, training_mode=False):
-        cfg['prob_generator']['device'] = device
-        cfg['prior_generator']['device'] = device
         model = Flamed(cfg)
         model.lexicon = model.read_lexicon()
         model.g2p = G2p()
@@ -272,7 +270,7 @@ class Flamed(FlamedLightning):
         self, 
         text, 
         lexicon_path=None, 
-        cleaners='english_cleaners'
+        cleaners=['english_cleaners']
         ):  
         text = text.rstrip(punctuation)
         phones = []

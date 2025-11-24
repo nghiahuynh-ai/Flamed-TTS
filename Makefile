@@ -16,29 +16,29 @@ EPOCHS ?= 100
 CKPT ?=
 
 # Synthesis defaults
-SYNTH_CKPT ?=
-SYNTH_CFG ?=
-SYNTH_TEXT ?=
-PROMPT_DIR ?=
-PROMPT_LIST ?=
-METADATA_FILE ?=
-OUTPUT_DIR ?= outputs
+SYNTH_CKPT ?= ckpts/averaged.ckpt
+SYNTH_CFG ?= ckpts/cfg.yaml
+SYNTH_TEXT ?= 
+PROMPT_DIR ?= ../librispeech/LibriSpeech-Clipped-5s
+PROMPT_LIST ?= 
+METADATA_FILE ?= ../librispeech/test-clean-clipped-5s.txt
+OUTPUT_DIR ?= ../outputs-ckpt30-34/5s
 SYNTH_DEVICE ?= cuda:0
-NSTEPS_DURGEN ?= 64
-NSTEPS_DENOISER ?= 64
-DENOISER_METHOD ?= forcing
-FORCING_STEPS_MIN ?=
-FORCING_STEPS_MAX ?=
+NSTEPS_DURGEN ?= 8
+NSTEPS_DENOISER ?= 128
+DENOISER_METHOD ?= euler
+FORCING_STEPS_MIN ?= 32
+FORCING_STEPS_MAX ?= 128
 TEMP_DURGEN ?= 0.3
 TEMP_DENOISER ?= 0.3
-GUIDANCE_SCALE ?= 3.5
+GUIDANCE_SCALE ?= 11.5
 SKIP_EXISTING ?= true
-SYNTH_BATCH_SIZE ?= 4
+SYNTH_BATCH_SIZE ?= 1
 WEIGHTS_ONLY ?= true
 
 # Avg Checkpoints
-AVG_CKPTS ?=
-AVG_OUTPUT ?= averaged.ckpt
+AVG_CKPTS ?= ckpts/ckpt-epoch=30-total_loss_val_epoch=7.90.ckpt ckpts/ckpt-epoch=31-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=32-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=33-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=34-total_loss_val_epoch=7.88.ckpt
+AVG_OUTPUT ?= ckpts/averaged.ckpt
 
 export WANDB_API_KEY
 export WANDB_MODE

@@ -246,7 +246,7 @@ def synthesize_with_metadata(
     with open(metadata_file, "r", encoding="utf-8") as fin:
         entries = [line.strip() for line in fin if line.strip()]
 
-    target_dir = os.path.join(output_dir, f"nfe{nsteps_denoiser}-temp{temp_denoiser}")
+    target_dir = os.path.join(output_dir, f"nfe{nsteps_denoiser}-temp{temp_denoiser}-cfg{guidance_scale}-{denoiser_method}")
     os.makedirs(target_dir, exist_ok=True)
 
     prompt_cache: Dict[str, Tuple[torch.Tensor, torch.Tensor]] = {}
@@ -255,7 +255,7 @@ def synthesize_with_metadata(
     pending: List[Dict[str, str]] = []
     for entry in entries:
         try:
-            filename, prompt_filename, transcript = entry.split("|", 2)
+            filename, prompt_filename, transcript, _, _, _ = entry.split("|")
         except ValueError:
             print(f"[WARN] Malformed line skipped: {entry}")
             continue
