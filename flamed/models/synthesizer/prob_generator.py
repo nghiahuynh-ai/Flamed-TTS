@@ -656,4 +656,4 @@ class ProbGenerator(nn.Module):
         probs = logits.softmax(dim=1)
         top_idx = logits.argmax(dim=1, keepdim=True)
         top_conf = probs.gather(1, top_idx).squeeze(1)
-        return top_conf.mean(dim=2)
+        return top_conf.mean(dim=1)
