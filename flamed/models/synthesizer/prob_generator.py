@@ -549,7 +549,7 @@ class ProbGenerator(nn.Module):
         ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
         use_prior_temperature = self.scheduler == "partial" and prior_logits is not None
         if use_prior_temperature:
-            temperature = self.mean_confidence(prior_logits)
+            temperature = 1 - self.mean_confidence(prior_logits)
         elif temperature is None:
             raise ValueError("`temperature` must be provided when SCHEDULER is not 'partial' or prior_logits are missing")
 
