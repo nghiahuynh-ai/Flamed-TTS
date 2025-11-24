@@ -553,7 +553,7 @@ class ProbGenerator(nn.Module):
         elif temperature is None:
             raise ValueError("`temperature` must be provided when SCHEDULER is not 'partial' or prior_logits are missing")
 
-        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature.unsqueeze(2) + cond
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
