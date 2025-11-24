@@ -491,6 +491,7 @@ class ProbGenerator(nn.Module):
         nfe=64,
         temperature=1.0,
         method='euler',
+        prior_logits=None,
         guidance_scale=None,
         n_sampling_steps_min=None,
         n_sampling_steps_max=None,
@@ -517,6 +518,7 @@ class ProbGenerator(nn.Module):
                 spk_uncond=spk_uncond,
                 n_sampling_steps_min=n_sampling_steps_min,
                 n_sampling_steps_max=n_sampling_steps_max,
+                prior_logits=prior_logits,
             )
         if method == 'euler':
             return self._sample_euler(
@@ -527,13 +529,31 @@ class ProbGenerator(nn.Module):
                 temperature=temperature,
                 guidance_scale=guidance_scale,
                 spk_uncond=spk_uncond,
+                prior_logits=prior_logits,
             )
         raise ValueError(f"Unsupported sampling method '{method}'")
 
-    def _sample_euler(self, cond, spk, mask, nfe, temperature, guidance_scale, spk_uncond=None):
+    def _sample_euler(
+            self, 
+            cond, 
+            spk, 
+            mask, 
+            nfe, 
+            temperature=None, 
+            guidance_scale=None, 
+            spk_uncond=None,
+            prior_logits=None
+    ):
+        if (temperature and prior_logits) or (not temperature and not prior_logits):
+            raise ValueError('`temperature` and `prior_logits` are exclusive! Either `temperature` or `prior_logits` must be not None')
+        
         b, l, _ = cond.shape
         ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
-        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        if prior_logits:
+            temperature = self.mean_confidence(prior_logits)
+            xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        else:
+            xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
@@ -554,11 +574,12 @@ class ProbGenerator(nn.Module):
         cond,
         spk,
         mask,
-        temperature,
-        guidance_scale,
+        temperature=None,
+        guidance_scale=None,
         spk_uncond=None,
         n_sampling_steps_min=None,
         n_sampling_steps_max=None,
+        prior_logits=None,
     ):
         if n_sampling_steps_min is None or n_sampling_steps_max is None:
             raise ValueError("n_sampling_steps_min and n_sampling_steps_max must be provided for forcing sampling")
@@ -617,3 +638,22 @@ class ProbGenerator(nn.Module):
 
         schedule = torch.clamp(schedule, min=1)
         return schedule
+
+    def mean_confidence(self, logits: torch.Tensor) -> torch.Tensor:
+        """
+        Compute mean confidence scores over quantizer dimension Q.
+
+        Args:
+            logits: Tensor shaped [B, C, Q, L] where C is class count.
+
+        Returns:
+            Tensor shaped [B, L] with the average softmax probability of the
+            predicted (argmax) class across Q.
+        """
+        if logits.dim() != 4:
+            raise ValueError(f"Expected logits with 4 dims [B, C, Q, L], got shape {tuple(logits.shape)}")
+
+        probs = logits.softmax(dim=1)
+        top_idx = logits.argmax(dim=1, keepdim=True)
+        top_conf = probs.gather(1, top_idx).squeeze(1)
+        return top_conf.mean(dim=2)
