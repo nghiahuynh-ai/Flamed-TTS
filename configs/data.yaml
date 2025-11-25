@@ -2,6 +2,7 @@ name: LibriTTS
 data_root: /cm/archive/nghiahnh/data/zact-metadata
 train_manifest: libritts_train_manifest_V2.txt
 valid_manifest: LT_dev_manifest.txt
+use_precomputed: false
 sampling_rate: 16000
 dur_min: 1
 dur_max: 16.6

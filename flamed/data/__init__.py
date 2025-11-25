@@ -1,1 +1,1 @@
-from .dataset import FlamedDataset
+from .dataset import FlamedDataset, FlamedDatasetV2

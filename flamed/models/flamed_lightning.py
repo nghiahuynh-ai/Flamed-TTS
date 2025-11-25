@@ -6,7 +6,7 @@ from flamed.models.facodec import (
     FACodecDecoder,
 )
 from omegaconf import DictConfig
-from flamed.data import FlamedDataset
+from flamed.data import FlamedDataset, FlamedDatasetV2
 from lightning import LightningModule
 from pytorch_lightning.utilities import rank_zero_only
 from transformers import get_cosine_schedule_with_warmup
@@ -20,7 +20,14 @@ class FlamedLightning(LightningModule, ABC):
         ):
         self.dataset_cfg = dataset_cfg
         self.optimizer_cfg = optimizer_cfg
-        self.dataset = FlamedDataset(dataset_cfg)
+        use_precomputed = False
+        if hasattr(dataset_cfg, "get"):
+            use_precomputed = bool(dataset_cfg.get("use_precomputed", False))
+        else:
+            use_precomputed = bool(getattr(dataset_cfg, "use_precomputed", False))
+
+        dataset_cls = FlamedDatasetV2 if use_precomputed else FlamedDataset
+        self.dataset = dataset_cls(dataset_cfg)
         self.optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=optimizer_cfg['lr'],
