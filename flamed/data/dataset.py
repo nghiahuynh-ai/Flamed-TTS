@@ -168,6 +168,32 @@ class FlamedDataset(LightningDataModule):
             raise ValueError(f"Unsupported multiprocessing context: {ctx_name}") from err
 
 
+class FlamedDatasetV2(FlamedDataset):
+    """Lightning DataModule that consumes precomputed tensor dumps.
+
+    The associated manifest (e.g. ``metadata_dev-clean.json``) lists lines in the
+    format ``<relative_pt_path>|<duration>|<transcript>`` and each ``.pt`` file
+    already contains the tensors required for training.
+    """
+
+    def setup(self, stage: Optional[str] = None):  # pylint: disable=unused-argument
+        dataset_kwargs = {
+            "data_root": self.data_root,
+            "dur_min": self.dur_min,
+            "dur_max": self.dur_max,
+            "n_words_min": self.n_words_min,
+            "seed": self.seed,
+        }
+        self.trainset = PrecomputedTextCodesDataset(  # pylint: disable=attribute-defined-outside-init
+            manifest=self.train_manifest,
+            **dataset_kwargs,
+        )
+        self.validset = PrecomputedTextCodesDataset(  # pylint: disable=attribute-defined-outside-init
+            manifest=self.valid_manifest,
+            **dataset_kwargs,
+        )
+
+
 class TextCodesDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -296,6 +322,82 @@ class TextCodesDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         datapoint = self.get_datapoint(self.samples[index])
         return datapoint
+
+    def __len__(self):
+        return len(self.samples)
+
+
+class PrecomputedTextCodesDataset(torch.utils.data.Dataset):
+    """Dataset wrapper for manifest lines pointing to precomputed ``.pt`` files."""
+
+    REQUIRED_FIELDS = ("phoneme", "code", "emb", "spk", "phone_dur", "sil_dur")
+
+    def __init__(
+        self,
+        data_root,
+        manifest,
+        dur_min=0.3,
+        dur_max=15,
+        n_words_min=3,
+        seed=None,
+    ):
+        self.data_root = data_root
+        self.manifest = manifest
+        self.dur_min = dur_min
+        self.dur_max = dur_max
+        self.n_words_min = n_words_min
+
+        manifest_path = os.path.join(self.data_root, self.manifest)
+        if not os.path.isfile(manifest_path):
+            raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+
+        samples, filters, dur_total = [], [], 0.0
+        with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+            for raw_line in manifest_file:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                parts = line.split("|", 2)
+                if len(parts) < 2:
+                    filters.append(line)
+                    continue
+                rel_path = parts[0]
+                duration_str = parts[1]
+                transcript = parts[2] if len(parts) == 3 else ""
+                try:
+                    duration = float(duration_str)
+                except ValueError:
+                    filters.append(line)
+                    continue
+                n_words = len(transcript.strip().split()) if transcript else 0
+                if duration < self.dur_min or duration > self.dur_max or n_words < self.n_words_min:
+                    filters.append(line)
+                    continue
+                abs_path = os.path.join(self.data_root, rel_path)
+                if not os.path.isfile(abs_path):
+                    raise FileNotFoundError(f"Missing precomputed sample: {abs_path}")
+                samples.append({"rel_path": rel_path, "abs_path": abs_path})
+                dur_total += duration
+
+        dur_total = round(dur_total / 3600, 3)
+        self.samples = samples
+
+        print('+-'*50)
+        print(f'>>>\t {self.manifest}: {dur_total} hours')
+        print(f'>>>\t Valid utterances: {len(self.samples)}')
+        print(f'>>>\t Filtered utterances: {len(filters)}')
+        print('+-'*50)
+
+        random.seed(seed)
+        random.shuffle(self.samples)
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+        datapoint = torch.load(sample["abs_path"], map_location="cpu")
+        for field in self.REQUIRED_FIELDS:
+            if field not in datapoint:
+                raise KeyError(f"Missing field '{field}' in precomputed sample {sample['rel_path']}")
+        return {key: datapoint[key] for key in self.REQUIRED_FIELDS}
 
     def __len__(self):
         return len(self.samples)
