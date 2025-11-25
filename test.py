@@ -252,6 +252,9 @@ def main():
         device=device,
     )
     loss_stats = run_compute_loss(model, train_batch)
+    
+    print("\n=== Total Parameters ===")
+    print(f"{sum(p.numel() for p in model.parameters()):,}")
 
     print("\n=== Compute Loss ===")
     for key, value in loss_stats.items():
