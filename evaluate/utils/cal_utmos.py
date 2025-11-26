@@ -13,7 +13,7 @@ from models.utmos.lightning_module import BaselineLightningModule
 from utils.checkpoints import resolve_checkpoint
 
 
-DEFAULT_UTMOS_CKPT = os.environ.get("UTMOS_CKPT", "ckpt/epoch=3-step=7459.ckpt")
+DEFAULT_UTMOS_CKPT = os.environ.get("UTMOS_CKPT", "ckpts/epoch=3-step=7459.ckpt")
 DEFAULT_CACHE_DIR = Path(os.environ.get("UTMOS_CACHE", Path.home() / ".cache" / "flamed" / "utmos")).expanduser()
 
 
