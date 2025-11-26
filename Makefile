@@ -34,8 +34,8 @@ SYNTH_BATCH_SIZE ?= 1
 WEIGHTS_ONLY ?= true
 
 # Avg Checkpoints
-AVG_CKPTS ?= ckpts/ckpt-epoch=30-total_loss_val_epoch=7.90.ckpt ckpts/ckpt-epoch=31-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=32-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=33-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=34-total_loss_val_epoch=7.88.ckpt
-AVG_OUTPUT ?= ckpts/averaged.ckpt
+AVG_CKPTS ?= ckpts/ckpt-epoch=40-total_loss_val_epoch=7.85.ckpt ckpts/ckpt-epoch=41-total_loss_val_epoch=7.84.ckpt ckpts/ckpt-epoch=42-total_loss_val_epoch=7.84.ckpt ckpts/ckpt-epoch=43-total_loss_val_epoch=7.83.ckpt ckpts/ckpt-epoch=44-total_loss_val_epoch=7.83.ckpt
+AVG_OUTPUT ?= ckpts/averaged1.ckpt
 
 # Evaluation defaults
 EVAL_MANIFEST ?=

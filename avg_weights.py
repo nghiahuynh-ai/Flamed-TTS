@@ -40,7 +40,7 @@ def extract_state_dict(obj: Mapping, ckpt_path: str) -> OrderedDict:
 
 
 def load_state_dict(path: str) -> OrderedDict:
-    data = torch.load(path, map_location="cpu")
+    data = torch.load(path, weights_only=False, map_location="cpu")
     if not isinstance(data, Mapping):
         raise ValueError(f"Checkpoint '{path}' must be a mapping of tensors.")
     return extract_state_dict(data, path)
