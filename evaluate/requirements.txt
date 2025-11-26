@@ -11,9 +11,9 @@ praat-parselmouth>=0.4.3
 pyworld>=0.3.4
 transformers>=4.38.0
 torchmetrics>=1.1.0
-fairseq==0.12.2
-# fairseq 0.12.x requires hydra-core<1.1 and omegaconf<2.1
-hydra-core==1.0.7
-omegaconf>=2.0.5,<2.1
+# fairseq 0.12.x is tied to omegaconf<2.1 and only ships wheels for Python<=3.10
+fairseq==0.12.2; python_version < "3.11"
+hydra-core==1.0.7; python_version < "3.11"
+omegaconf==2.0.6; python_version < "3.11"
 tgt
 einops

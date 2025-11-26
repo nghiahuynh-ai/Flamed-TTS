@@ -53,6 +53,7 @@ EVAL_SIM_CKPT ?=
 EVAL_UTMOS_CKPT ?=
 EVAL_CACHE_DIR ?= $(HOME)/.cache/flamed/eval
 EVAL_VENV ?= .venv-eval
+EVAL_VENV_PYTHON ?= python3.10
 EVAL_PYTHON ?= $(EVAL_VENV)/bin/python
 EVAL_REQUIREMENTS ?= evaluate/requirements.txt
 
@@ -128,7 +129,7 @@ eval:
 	@test -n "$(strip $(EVAL_OUTPUT_DIR))" || (echo "Set EVAL_OUTPUT_DIR to the output directory for metrics." && exit 1)
 	@test -n "$(strip $(EVAL_MANIFEST))" || (echo "Set EVAL_MANIFEST for prompt/transcript mappings." && exit 1)
 	@test -n "$(strip $(EVAL_PROMPT))" || (echo "Set EVAL_PROMPT to the prompt/reference wav directory." && exit 1)
-	@if [ ! -x "$(EVAL_PYTHON)" ]; then python -m venv "$(EVAL_VENV)"; fi
+	@if [ ! -x "$(EVAL_PYTHON)" ]; then $(EVAL_VENV_PYTHON) -m venv "$(EVAL_VENV)"; fi
 	@$(EVAL_PYTHON) -m pip install -r "$(EVAL_REQUIREMENTS)"
 	"$(EVAL_PYTHON)" evaluate/evaluate.py \
 		--manifest "$(EVAL_MANIFEST)" \
