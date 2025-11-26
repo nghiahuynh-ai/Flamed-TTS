@@ -12,5 +12,6 @@ pyworld>=0.3.4
 transformers>=4.38.0
 torchmetrics>=1.1.0
 fairseq>=0.12.2
+omegaconf<2.1.0,>=2.0.5
 tgt
 einops
