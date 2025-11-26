@@ -37,6 +37,25 @@ WEIGHTS_ONLY ?= true
 AVG_CKPTS ?= ckpts/ckpt-epoch=30-total_loss_val_epoch=7.90.ckpt ckpts/ckpt-epoch=31-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=32-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=33-total_loss_val_epoch=7.88.ckpt ckpts/ckpt-epoch=34-total_loss_val_epoch=7.88.ckpt
 AVG_OUTPUT ?= ckpts/averaged.ckpt
 
+# Evaluation defaults
+EVAL_MANIFEST ?=
+EVAL_SYNTH ?=
+EVAL_PROMPT ?=
+EVAL_TGT ?=
+EVAL_OUTPUT_DIR ?=
+EVAL_NAME ?= flamedv3
+EVAL_METRICS ?= utmos sim wer prosody
+EVAL_SR ?= 16000
+EVAL_DEVICE ?= cuda:0
+EVAL_CODEC ?= facodec
+EVAL_SIM_MODEL ?=
+EVAL_SIM_CKPT ?=
+EVAL_UTMOS_CKPT ?=
+EVAL_CACHE_DIR ?= $(HOME)/.cache/flamed/eval
+EVAL_VENV ?= .venv-eval
+EVAL_PYTHON ?= $(EVAL_VENV)/bin/python
+EVAL_REQUIREMENTS ?= evaluate/requirements.txt
+
 export WANDB_API_KEY
 export WANDB_MODE
 
@@ -46,7 +65,7 @@ help:
 	@echo "Targets:"
 	@echo "  make train  - Launch Lightning training with WandB logging."
 	@echo "  make synth  - Run synthesis via synthesize.py (prompt-list or metadata mode)."
-	@echo "  make eval   - Placeholder until the evaluation script is published."
+	@echo "  make eval   - Run evaluation metrics (set EVAL_* vars accordingly)."
 	@echo "  make avg    - Average checkpoint weights (set AVG_CKPTS and AVG_OUTPUT)."
 	@echo ""
 	@echo "Override variables on the command line, e.g.:"
@@ -105,7 +124,27 @@ synth:
 		$(if $(strip $(METADATA_FILE)),--metadata-file "$(METADATA_FILE)",)
 
 eval:
-	@echo "Evaluation workflow is TBD. Wire this target up once the eval script is available."
+	@test -n "$(strip $(EVAL_SYNTH))" || (echo "Set EVAL_SYNTH to the synthesized wav directory." && exit 1)
+	@test -n "$(strip $(EVAL_OUTPUT_DIR))" || (echo "Set EVAL_OUTPUT_DIR to the output directory for metrics." && exit 1)
+	@test -n "$(strip $(EVAL_MANIFEST))" || (echo "Set EVAL_MANIFEST for prompt/transcript mappings." && exit 1)
+	@test -n "$(strip $(EVAL_PROMPT))" || (echo "Set EVAL_PROMPT to the prompt/reference wav directory." && exit 1)
+	@if [ ! -x "$(EVAL_PYTHON)" ]; then python -m venv "$(EVAL_VENV)"; fi
+	@$(EVAL_PYTHON) -m pip install -r "$(EVAL_REQUIREMENTS)"
+	"$(EVAL_PYTHON)" evaluate/evaluate.py \
+		--manifest "$(EVAL_MANIFEST)" \
+		--synth_path "$(EVAL_SYNTH)" \
+		--prompt_path "$(EVAL_PROMPT)" \
+		--output_path "$(EVAL_OUTPUT_DIR)" \
+		--name "$(EVAL_NAME)" \
+		--metrics $(EVAL_METRICS) \
+		--sr $(EVAL_SR) \
+		--device "$(EVAL_DEVICE)" \
+		--codec "$(EVAL_CODEC)" \
+		$(if $(strip $(EVAL_TGT)),--tgt_path "$(EVAL_TGT)",) \
+		$(if $(strip $(EVAL_SIM_MODEL)),--sim_model "$(EVAL_SIM_MODEL)",) \
+		$(if $(strip $(EVAL_SIM_CKPT)),--sim_ckpt "$(EVAL_SIM_CKPT)",) \
+		$(if $(strip $(EVAL_UTMOS_CKPT)),--utmos_ckpt "$(EVAL_UTMOS_CKPT)",) \
+		--cache_dir "$(EVAL_CACHE_DIR)"
 
 avg:
 	@test -n "$(strip $(AVG_CKPTS))" || (echo "Provide AVG_CKPTS with space-separated checkpoint paths." && exit 1)
