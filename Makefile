@@ -131,6 +131,7 @@ eval:
 	@test -n "$(strip $(EVAL_PROMPT))" || (echo "Set EVAL_PROMPT to the prompt/reference wav directory." && exit 1)
 	@if [ ! -x "$(EVAL_PYTHON)" ]; then $(EVAL_VENV_PYTHON) -m venv "$(EVAL_VENV)"; fi
 	@$(EVAL_PYTHON) -m pip install -r "$(EVAL_REQUIREMENTS)"
+	@$(EVAL_PYTHON) -m pip install -e "evaluate/s3prl"
 	"$(EVAL_PYTHON)" evaluate/evaluate.py \
 		--manifest "$(EVAL_MANIFEST)" \
 		--synth_path "$(EVAL_SYNTH)" \
