@@ -10,7 +10,7 @@ fire>=0.5.0
 tqdm>=4.65.0
 praat-parselmouth>=0.4.3
 pyworld>=0.3.4
-transformers>=4.38.0
+transformers==4.44.0
 torchmetrics>=1.1.0
 # fairseq 0.12.x is tied to omegaconf<2.1 and only ships wheels for Python<=3.10
 fairseq==0.12.2; python_version < "3.11"
