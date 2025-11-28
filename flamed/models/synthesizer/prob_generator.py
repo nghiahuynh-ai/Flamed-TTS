@@ -184,7 +184,10 @@ class ConditionDownSampler(nn.Module):
                         out_channels=in_channel // 2,
                         kernel_size=1,
                     ),
-                    nn.GroupNorm(n_groups, in_channel // 2),
+                    nn.GroupNorm(
+                        num_groups=max(1, math.gcd(n_groups, in_channel // 2)),
+                        num_channels=in_channel // 2,
+                    ),
                     nn.ReLU(),
                 )
             )
@@ -196,12 +199,14 @@ class ConditionDownSampler(nn.Module):
         )
 
     def forward(self, x, mask):
-        mask = mask.transpose(1, -1)
+        mask_t = mask.transpose(1, -1)
         x = x.transpose(1, -1)
         for ith in range(self.n_stages):
-            x = self.resblocks[ith](x, mask)
+            x = self.resblocks[ith](x, mask_t)
             x = self.downblocks[ith](x)
+            x = x * mask_t
         x = x.transpose(1, -1)
+        x = x * mask
         return self.proj_out(x)
 
 
@@ -388,6 +393,7 @@ class ProbGenerator(nn.Module):
 
         self.target_dim = config['target_dim']
         self.sigma_min = config['sigma_min']
+        self.uncond_spk = nn.Parameter(torch.zeros(1, config['spk_dim']))
 
         self.quantizer_encoding = QuantizerEncoding(
             n_quantizers=config['n_quantizers'],
@@ -413,6 +419,16 @@ class ProbGenerator(nn.Module):
         self.cfg_dropout_prob = float(config.get('cfg_dropout_prob', 0.0))
         self.guidance_scale = float(config.get('guidance_scale', 1.0))
 
+    def _expand_uncond_spk(self, spk):
+        # Expand learnable unconditional speaker to match batch/sequence dims.
+        if spk.ndim == 2:
+            return self.uncond_spk.expand(spk.size(0), spk.size(1))
+        if spk.ndim == 3:
+            return self.uncond_spk.unsqueeze(1).expand(spk.size(0), spk.size(1), spk.size(2))
+        # Fallback for unexpected shapes.
+        target_shape = (spk.size(0),) + (1,) * (spk.ndim - 2) + (spk.size(-1),)
+        return self.uncond_spk.view((1,) * (spk.ndim - 1) + (-1,)).expand(*target_shape)
+
     def _apply_cfg_dropout(self, spk):
         if not self.training or self.cfg_dropout_prob <= 0:
             return spk
@@ -422,7 +438,7 @@ class ProbGenerator(nn.Module):
         if not drop_mask.any():
             return spk
         drop_mask = drop_mask.view(spk.size(0), *([1] * (spk.ndim - 1)))
-        fake_spk = torch.randn_like(spk)
+        fake_spk = self._expand_uncond_spk(spk)
         return torch.where(drop_mask, fake_spk, spk)
 
     def _expand_timesteps(self, t, batch_size):
@@ -430,6 +446,10 @@ class ProbGenerator(nn.Module):
             return t
         expanded_shape = (batch_size,) + tuple(t.shape[1:])
         return t.expand(*expanded_shape)
+
+    def _init_state(self, cond, temperature=1.0):
+        noise = torch.randn_like(cond) * float(temperature)
+        return cond + noise
 
     def _guided_velocity(
         self,
@@ -447,6 +467,12 @@ class ProbGenerator(nn.Module):
             guidance_scale = float(guidance_scale)
 
         t = self._expand_timesteps(t, batch_size)
+        if t.dim() == 2 and t.size(1) == 1 and xt.size(1) > 1:
+            t = t.expand(batch_size, xt.size(1))
+        elif t.dim() == 3 and t.size(1) == 1 and t.size(2) == 1 and xt.size(1) > 1:
+            t = t.expand(batch_size, xt.size(1), 1)
+        if mask is not None:
+            xt = xt * mask.to(xt.dtype)
         use_guidance = (
             spk_uncond is not None and not math.isclose(guidance_scale, 1.0)
         )
@@ -467,17 +493,21 @@ class ProbGenerator(nn.Module):
     def compute_loss(self, x1, cond, spk, mask, training=True):
         cond = self.quantizer_encoding(cond)
         cond = self.cond_downsampling(cond, mask)
+        cond = cond * mask
 
         if training:
             t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
         else:
             t = torch.zeros((cond.size(0), cond.size(1), 1), device=cond.device)
-        x0 = torch.randn_like(cond, device=cond.device) + cond
-        xt = t * x1 + (1 - (1 - self.sigma_min) * t) * x0
+
+        x0 = self._init_state(cond)
+        xt = (1 - t) * x0 + t * x1
+        xt = xt * mask
 
         spk = self._apply_cfg_dropout(spk)
         vt = self.denoiser(xt, t.squeeze(-1), spk) * mask
-        fm_loss = F.mse_loss(vt, (x1 - (1 - self.sigma_min) * x0) * mask)
+        target_v = (x1 - x0) * mask
+        fm_loss = F.mse_loss(vt, target_v)
 
         anchor_loss = F.mse_loss(cond * mask, x1 * mask)
 
@@ -504,10 +534,10 @@ class ProbGenerator(nn.Module):
             guidance_scale = float(guidance_scale)
 
         use_cfg = self.cfg_dropout_prob > 0 and not math.isclose(guidance_scale, 1.0)
-        spk_uncond = torch.zeros_like(spk) if use_cfg else None
+        spk_uncond = self._expand_uncond_spk(spk) if use_cfg else None
 
         return self._sample_euler(
-            cond,
+            cond * mask,
             spk,
             mask,
             nfe=nfe,
@@ -531,7 +561,7 @@ class ProbGenerator(nn.Module):
 
         b, l, _ = cond.shape
         ts = torch.linspace(0, 1, nfe + 1, device=cond.device)
-        xt = torch.randn((b, l, self.target_dim), device=cond.device) * temperature + cond
+        xt = self._init_state(cond, temperature=temperature)
         delta_t = 1 / nfe
 
         for i in range(1, len(ts)):
@@ -544,6 +574,8 @@ class ProbGenerator(nn.Module):
                 guidance_scale=guidance_scale,
             )
             xt = xt + delta_t * vt
+            if mask is not None:
+                xt = xt * mask.to(xt.dtype)
 
         return xt.transpose(1, -1)
 
