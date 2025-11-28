@@ -25,8 +25,11 @@ class FlamedLightning(LightningModule, ABC):
         self.dataset_cfg = dataset_cfg
         self.optimizer_cfg = optimizer_cfg
         self.dataset = FlamedDataset(dataset_cfg)
+        params = [p for p in self.parameters() if p.requires_grad]
+        if not params:
+            raise ValueError(f"No trainable parameters found for pipeline {getattr(self, 'pipeline', None)}.")
         self.optimizer = torch.optim.AdamW(
-            self.parameters(),
+            params,
             lr=optimizer_cfg['lr'],
             betas=optimizer_cfg["betas"],
             eps=optimizer_cfg["eps"],
@@ -152,6 +155,8 @@ class FlamedLightning(LightningModule, ABC):
         if self.trainer and self.trainer.sanity_checking:
             return
         if self._last_logged_val_epoch == self.current_epoch:
+            return
+        if not getattr(self, "prob_generator", None):
             return
         
         self._last_logged_val_epoch = self.current_epoch

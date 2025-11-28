@@ -22,16 +22,38 @@ from flamed.models.facodec import (
 class Flamed(FlamedLightning):
     
     @classmethod
-    def from_pretrained(cls, cfg, ckpt_path, device, weights_only=False, training_mode=False):
+    def from_pretrained(
+        cls,
+        cfg,
+        ckpt_path,
+        device,
+        weights_only=False,
+        training_mode=False,
+        modules=None,
+    ):
         model = Flamed(cfg)
         model.lexicon = model.read_lexicon()
         model.g2p = G2p()
+
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=weights_only)
-        if not weights_only:
-            model.load_state_dict(ckpt['state_dict'])
-        else:
-            model.load_state_dict(ckpt)
+        state = ckpt['state_dict'] if (not weights_only and 'state_dict' in ckpt) else ckpt
+
+        prefixes = None
+        if modules:
+            prefixes = tuple(f"{m}." for m in modules)
+            state = {k: v for k, v in state.items() if k.startswith(prefixes)}
+            if not state:
+                raise ValueError(f"No weights found for modules {modules} in checkpoint: {ckpt_path}")
+
+        load_result = model.load_state_dict(state, strict=modules is None)
+        if prefixes:
+            missing_relevant = [k for k in load_result.missing_keys if k.startswith(prefixes)]
+            if missing_relevant:
+                raise ValueError(
+                    f"Missing expected weights for modules {modules} in checkpoint {ckpt_path}: {missing_relevant}"
+                )
         del ckpt
+
         if not training_mode:
             model.eval()
         return model
@@ -40,8 +62,48 @@ class Flamed(FlamedLightning):
         super(Flamed, self).__init__()
 
         self.cfg = cfg
+        self.pipeline = tuple(self._prepare_pipeline(cfg.get('pipeline')))
+        self._train_prior = 'PriorGenerator' in self.pipeline
+        self._train_prob = 'ProbGenerator' in self.pipeline
         self.prior_generator = PriorGenerator(cfg['prior_generator'])
-        self.prob_generator = ProbGenerator(cfg['prob_generator'])
+        self.prob_generator = ProbGenerator(cfg['prob_generator']) if self._train_prob else None
+        self._apply_pipeline_freezing()
+    
+    def _prepare_pipeline(self, pipeline_cfg):
+        if pipeline_cfg is None:
+            return ['PriorGenerator', 'ProbGenerator']
+        if isinstance(pipeline_cfg, str):
+            pipeline_cfg = [pipeline_cfg]
+        seen = set()
+        ordered = []
+        for module in pipeline_cfg:
+            name = str(module)
+            if name in seen:
+                continue
+            seen.add(name)
+            ordered.append(name)
+        return ordered
+    
+    def _apply_pipeline_freezing(self):
+        if not self._train_prior:
+            self._freeze_module(self.prior_generator)
+        if self.prob_generator is not None and not self._train_prob:
+            self._freeze_module(self.prob_generator)
+    
+    @staticmethod
+    def _freeze_module(module):
+        for param in module.parameters():
+            param.requires_grad = False
+        module.eval()
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        # Keep frozen modules in eval mode even during model.train()
+        if not self._train_prior:
+            self.prior_generator.eval()
+        if self.prob_generator is not None and not self._train_prob:
+            self.prob_generator.eval()
+        return self
         
     def forward(
         self,
@@ -57,35 +119,46 @@ class Flamed(FlamedLightning):
         training=True,
         ):
         
-        # Forward & compute losses of codes generator
-        (
-            prior_embs,
-            tgt_masks,
-            ar_losses,
-        ) = self.prior_generator.compute_loss(
-            texts=phonemes,
-            src_lens=x_len,
-            max_src_len=phonemes.size(-1),
-            codes=codes,
-            tgt_lens=y_len,
-            max_tgt_len=codes.size(-1),
-            phone_durations=phone_durations,
-            sil_durations=sil_durations,
-            prompts=prompts,
-            prompts_len=prompts.size(-1),
-            training=training,
-        )
+        # Run PriorGenerator; detach gradients when it is frozen.
+        prior_training = training and self._train_prior
+        prior_mode_flag = training and self._train_prior
+        prior_context = torch.enable_grad() if prior_training else torch.no_grad()
+        with prior_context:
+            (
+                prior_embs,
+                tgt_masks,
+                ar_losses,
+            ) = self.prior_generator.compute_loss(
+                texts=phonemes,
+                src_lens=x_len,
+                max_src_len=phonemes.size(-1),
+                codes=codes,
+                tgt_lens=y_len,
+                max_tgt_len=codes.size(-1),
+                phone_durations=phone_durations,
+                sil_durations=sil_durations,
+                prompts=prompts,
+                prompts_len=prompts.size(-1),
+                training=prior_mode_flag,
+            )
+        losses = {}
+        if self._train_prior:
+            losses.update(ar_losses)
+
+        cond_embs = prior_embs if prior_training else prior_embs.detach()
+
+        # Forward & compute losses of flow matching when enabled.
+        if self._train_prob and self.prob_generator is not None:
+            prob_losses = self.prob_generator.compute_loss(
+                x1=embs,
+                cond=cond_embs,
+                spk=spks,
+                mask=~tgt_masks.unsqueeze(-1),
+                training=training,
+            )
+            losses.update(prob_losses)
         
-        # Forward & compute losses of flow matching
-        prob_losses = self.prob_generator.compute_loss(
-            x1=embs,
-            cond=prior_embs,
-            spk=spks,
-            mask=~tgt_masks.unsqueeze(-1),
-            training=training,
-        )
-        
-        return ar_losses | prob_losses
+        return losses
     
     @torch.inference_mode()
     def sample(
@@ -107,6 +180,9 @@ class Flamed(FlamedLightning):
         lexicon_path: str = None,
         cleaners: str = ['english_cleaners'],
         ):
+        
+        if self.prob_generator is None:
+            raise ValueError('ProbGenerator is not initialized (pipeline excluded ProbGenerator); sampling is unavailable.')
         
         if codec_encoder is None or codec_decoder is None:
             if codec_cfg is None:
@@ -182,6 +258,8 @@ class Flamed(FlamedLightning):
         nsteps_denoiser: int = 64,
         guidance_scale: float | None = None,
     ):
+        if self.prob_generator is None:
+            raise ValueError('ProbGenerator is not initialized (pipeline excluded ProbGenerator); sampling is unavailable.')
         start_time = time.time()
 
         phonemes = phonemes.to(self.device)

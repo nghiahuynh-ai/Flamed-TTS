@@ -3,12 +3,16 @@ PYTHON ?= python
 .DEFAULT_GOAL := help
 
 # WandB / training defaults
-WANDB_PROJECT ?= flamed-tts-v3
-WANDB_RUN ?= forcing-cfg-distill
+WANDB_PROJECT ?= flamed-tts-v4
+WANDB_RUN ?= v4
 WANDB_VERSION ?= local
 WANDB_MODE ?= online
 EXP_ROOT ?= experiments
 EXP_NAME ?= $(WANDB_RUN)
+# Comma-separated modules to train: PriorGenerator, ProbGenerator, or both
+PIPELINE ?= PriorGenerator,ProbGenerator
+# Pretrained checkpoint for PriorGenerator when training ProbGenerator alone
+PRIOR_CKPT ?=
 # Comma-separated CUDA indices understood by train.py (e.g., "0" or "0,1")
 DEVICES ?= 0,1,2,3
 BATCH_SIZE ?= 16
@@ -87,6 +91,8 @@ train:
 		--exp_root "$(EXP_ROOT)" \
 		--exp_name "$(EXP_NAME)" \
 		--devices "$(DEVICES)" \
+		--pipeline "$(PIPELINE)" \
+		$(if $(strip $(PRIOR_CKPT)),--prior_ckpt "$(PRIOR_CKPT)",) \
 		--batch_size $(BATCH_SIZE) \
 		--epochs $(EPOCHS) \
 		$(if $(strip $(CKPT)),--ckpt "$(CKPT)",)

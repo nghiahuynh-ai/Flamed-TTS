@@ -34,7 +34,26 @@ def _configure_start_method(preferred_method=None):
         pass
 
 
-def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, ckpt):
+def _parse_pipeline(pipeline_str):
+    allowed = {'PriorGenerator', 'ProbGenerator'}
+    modules = [item.strip() for item in pipeline_str.split(',') if item.strip()]
+    if not modules:
+        raise ValueError("PIPELINE must include at least one of PriorGenerator or ProbGenerator.")
+    invalid = [m for m in modules if m not in allowed]
+    if invalid:
+        raise ValueError(f"Unsupported pipeline entries: {', '.join(invalid)}. Valid options: {', '.join(sorted(allowed))}.")
+    # Preserve order while removing duplicates
+    seen = set()
+    deduped = []
+    for module in modules:
+        if module in seen:
+            continue
+        seen.add(module)
+        deduped.append(module)
+    return deduped
+
+
+def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, ckpt, pipeline, prior_ckpt):
     
     if not os.path.exists(os.path.join(exp_root, exp_name)):
         os.mkdir(os.path.join(exp_root, exp_name))
@@ -61,10 +80,26 @@ def train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, c
         'prior_generator': prior_cfg,
         'prob_generator': prob_cfg,
         'codec_cfg': codec_cfg,
+        'pipeline': pipeline,
     })
     OmegaConf.save(cfg, os.path.join(os.path.join(exp_root, exp_name), 'config.yaml'))
 
-    model = Flamed(cfg)
+    requires_prior_ckpt = ('ProbGenerator' in pipeline) and ('PriorGenerator' not in pipeline)
+    if requires_prior_ckpt and not prior_ckpt:
+        raise ValueError("prior_ckpt is required when training ProbGenerator without PriorGenerator.")
+
+    if requires_prior_ckpt:
+        model = Flamed.from_pretrained(
+            cfg,
+            prior_ckpt,
+            device=accelerator,
+            weights_only=False,
+            training_mode=True,
+            modules=['prior_generator'],
+        )
+    else:
+        model = Flamed(cfg)
+
     model.setup_dataset_optimizer(data_config, optimizer_cfg)
     train_data, val_data = model.get_dataset()
 
@@ -111,6 +146,18 @@ if __name__ == '__main__':
     parser.add_argument('--exp_root', type=str, default=None)
     parser.add_argument('--exp_name', type=str, required=True)
     parser.add_argument('--devices', type=str, default='0')
+    parser.add_argument(
+        '--pipeline',
+        type=str,
+        default='PriorGenerator,ProbGenerator',
+        help='Comma-separated modules to train: PriorGenerator, ProbGenerator, or both.',
+    )
+    parser.add_argument(
+        '--prior_ckpt',
+        type=str,
+        default=None,
+        help='Checkpoint containing PriorGenerator weights (required when training ProbGenerator alone).',
+    )
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--ckpt', type=str, default=None)
@@ -131,8 +178,10 @@ if __name__ == '__main__':
     exp_root = args.exp_root
     exp_name = args.exp_name
     devices = [int(device) for device in args.devices.split(',')]
+    pipeline = _parse_pipeline(args.pipeline)
+    prior_ckpt = args.prior_ckpt
     batch_size = args.batch_size
     epochs = args.epochs
     ckpt = args.ckpt
     
-    train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, ckpt)
+    train(proj_name, version, exp_root, exp_name, devices, batch_size, epochs, ckpt, pipeline, prior_ckpt)
