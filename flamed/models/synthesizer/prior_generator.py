@@ -29,12 +29,15 @@ class PreEncoding(nn.Module):
 class PriorGenerator(nn.Module):
     def __init__(self, config):
         super(PriorGenerator, self).__init__()
+
+        assert config["codec"]["n_quantizers"] == len(config["transformer"]["loss_weight"])
         
         self.config = config
         encoder_hidden = config["transformer"]["encoder_hidden"]
         decoder_hidden = config["transformer"]["decoder_hidden"]
         vocab_size = config["codec"]["vocab_size"]
-        n_quantizers = config["codec"]["n_quantizers"]
+        self.n_quantizers = config["codec"]["n_quantizers"]
+        self.loss_weight = config["transformer"]["loss_weight"]
 
         self.encoder = Encoder(config)
         self.pva = PVA(config['variance_adaptor'])
@@ -46,9 +49,9 @@ class PriorGenerator(nn.Module):
             padding_idx=vocab_size,
         )
         self.shared_decoder = Decoder(config, config["transformer"]["decoder_shared_layers"])
-        self.pre_encode = PreEncoding(decoder_hidden, n_quantizers)
+        self.pre_encode = PreEncoding(decoder_hidden, self.n_quantizers)
         self.prior_decoder = nn.ModuleList()
-        for ith in range(n_quantizers):
+        for ith in range(self.n_quantizers):
             self.prior_decoder.append(
                 Decoder(
                     config, 
@@ -116,8 +119,8 @@ class PriorGenerator(nn.Module):
         # Compute loss
         prior_loss = 0
         for idx in range(codes.size(1)):
-            prior_loss = prior_loss + F.cross_entropy(logits[:, :, idx, :], codes[:, idx, :])
-        prior_loss = prior_loss / codes.size(1)
+            prior_loss = prior_loss + self.loss_weight[idx] * F.cross_entropy(logits[:, :, idx, :], codes[:, idx, :])
+        # prior_loss = prior_loss / codes.size(1)
 
         losses = pva_losses | {'prior_loss': prior_loss}
 
