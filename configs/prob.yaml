@@ -9,8 +9,8 @@ sigma_min: 1e-6
 cfg_dropout_prob: 0.1
 guidance_scale: 3.5
 convnext:
-  kernel_size: 31
+  kernel_size: 3
   stride: 1
-  padding: 15
+  padding: 1
   expand: 1
-  groups: null
+  groups: 128
