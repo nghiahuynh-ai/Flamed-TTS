@@ -234,6 +234,8 @@ def main():
     device = resolve_device(args.device)
     cfg = build_cfg(device)
     model = Flamed(cfg).to(device)
+    print("Prior params: ", sum(p.numel() for p in model.prior_generator.parameters()))
+    print("Prob params: ", sum(p.numel() for p in model.prob_generator.parameters()))
     print("Total params: ", sum(p.numel() for p in model.parameters()))
 
     inputs = fabricate_dummy_inputs(
