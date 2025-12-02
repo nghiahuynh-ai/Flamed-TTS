@@ -435,10 +435,10 @@ class ProbGenerator(nn.Module):
         drop_mask = torch.rand(
             spk.size(0), 1, device=spk.device
         ) < self.cfg_dropout_prob
-        if not drop_mask.any():
-            return spk
         drop_mask = drop_mask.view(spk.size(0), *([1] * (spk.ndim - 1)))
         fake_spk = self._expand_uncond_spk(spk)
+        # Use torch.where without early exit so the learnable unconditional
+        # embedding stays in the graph even when no examples are dropped.
         return torch.where(drop_mask, fake_spk, spk)
 
     def _expand_timesteps(self, t, batch_size):
