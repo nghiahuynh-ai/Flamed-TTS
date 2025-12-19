@@ -244,9 +244,11 @@ class TextCodesDataset(torch.utils.data.Dataset):
         textgrid = tgt.io.read_textgrid(textgrid_path, include_empty_intervals=True)
 
         gt = json.load(open(tgt_codes_path))
-        spk, codes, embs = gt['spkemb'], gt['quantizers'], gt['vqemb']
+        spk, quantizers, embs = gt['spkemb'], gt['quantizers'], gt['vqemb']
         spk = torch.FloatTensor(spk)
-        codes = torch.stack([torch.IntTensor(quantizer) for quantizer in codes])
+        if len(quantizers) <= 1:
+            raise ValueError(f"Expected at least two quantizer sequences, got {len(quantizers)} in {tgt_codes_path}")
+        codes = torch.stack([torch.IntTensor(quantizers[1])])
         embs = torch.stack([torch.FloatTensor(emb) for emb in embs])
 
         phones, phone_durations, sil_durations = self.get_alignment(textgrid.get_tier_by_name("phones"))
