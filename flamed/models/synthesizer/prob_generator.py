@@ -496,16 +496,17 @@ class ProbGenerator(nn.Module):
         cond = cond * mask
 
         if training:
-            t = torch.rand((cond.size(0), cond.size(1), 1), device=cond.device)
+            t = torch.rand((cond.size(0), 1, 1), device=cond.device)
         else:
-            t = torch.zeros((cond.size(0), cond.size(1), 1), device=cond.device)
+            t = torch.zeros((cond.size(0), 1, 1), device=cond.device)
 
         x0 = self._init_state(cond)
         xt = (1 - t) * x0 + t * x1
         xt = xt * mask
 
         spk = self._apply_cfg_dropout(spk)
-        vt = self.denoiser(xt, t.squeeze(-1), spk) * mask
+        t_embed = t.squeeze(-1)  # keep a (B, 1) timestep tensor for embedding
+        vt = self.denoiser(xt, t_embed, spk) * mask
         target_v = (x1 - x0) * mask
         fm_loss = F.mse_loss(vt, target_v)
 
