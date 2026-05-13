@@ -99,7 +99,46 @@ Optional knobs from the Makefile include `SKIP_EXISTING` to avoid re-synthesizin
 
 ## 🔄 Training Flamed-TTS from scratch
 
-TBD.
+Training is launched through `make train` (wrapper over `train.py`):
+
+```bash
+make train \
+	WANDB_PROJECT=flamed-tts \
+	WANDB_RUN=baseline \
+	WANDB_VERSION=v1 \
+	EXP_ROOT=experiments \
+	EXP_NAME=baseline \
+	DEVICES=0 \
+	BATCH_SIZE=16 \
+	EPOCHS=100 \
+	PIPELINE=PriorGenerator,ProbGenerator
+```
+
+Key runtime knobs:
+- `DEVICES`: `0` for single GPU, or `0,1,2,3` for multi-GPU.
+- `PIPELINE`: `PriorGenerator`, `ProbGenerator`, or both.
+- `PRIOR_CKPT`: required when training `ProbGenerator` only.
+
+### Adaptive batching (GPU utilization)
+
+Enable adaptive batching from CLI:
+
+```bash
+python train.py \
+	--proj_name flamed-tts \
+	--ver v1 \
+	--exp_root experiments \
+	--exp_name adaptive_run \
+	--devices 0 \
+	--pipeline PriorGenerator,ProbGenerator \
+	--batch_size 16 \
+	--epochs 100 \
+	--adaptive_batching \
+	--adaptive_target_utilization 0.8 \
+	--adaptive_max_batch_size 64
+```
+
+You can also tune adaptive defaults in `configs/data.yaml` under `adaptive_batching`.
 
 ## ⚠️ Disclaimer
 

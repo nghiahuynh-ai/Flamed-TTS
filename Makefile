@@ -18,6 +18,18 @@ DEVICES ?= 0,1,2,3
 BATCH_SIZE ?= 16
 EPOCHS ?= 100
 CKPT ?=
+PRECISION ?=
+ACCUM_GRAD_BATCHES ?= 1
+GRAD_CLIP_VAL ?= 0.0
+NUM_WORKERS ?=
+PREFETCH_FACTOR ?=
+PIN_MEMORY ?=
+ADAPTIVE_BATCHING ?= false
+ADAPTIVE_TARGET_UTILIZATION ?=
+ADAPTIVE_MAX_BATCH_SIZE ?=
+ADAPTIVE_MEMORY_BUDGET ?=
+ADAPTIVE_TARGET_BATCH_COST ?=
+ADAPTIVE_SEED ?=
 
 # Synthesis defaults
 SYNTH_CKPT ?= ckpts/averaged.ckpt
@@ -95,7 +107,19 @@ train:
 		$(if $(strip $(PRIOR_CKPT)),--prior_ckpt "$(PRIOR_CKPT)",) \
 		--batch_size $(BATCH_SIZE) \
 		--epochs $(EPOCHS) \
-		$(if $(strip $(CKPT)),--ckpt "$(CKPT)",)
+		$(if $(strip $(CKPT)),--ckpt "$(CKPT)",) \
+		--accumulate_grad_batches $(ACCUM_GRAD_BATCHES) \
+		--gradient_clip_val $(GRAD_CLIP_VAL) \
+		$(if $(strip $(PRECISION)),--precision "$(PRECISION)",) \
+		$(if $(strip $(NUM_WORKERS)),--num_workers $(NUM_WORKERS),) \
+		$(if $(strip $(PREFETCH_FACTOR)),--prefetch_factor $(PREFETCH_FACTOR),) \
+		$(if $(strip $(PIN_MEMORY)),--pin_memory $(PIN_MEMORY),) \
+		$(if $(filter true,$(ADAPTIVE_BATCHING)),--adaptive_batching,) \
+		$(if $(strip $(ADAPTIVE_TARGET_UTILIZATION)),--adaptive_target_utilization $(ADAPTIVE_TARGET_UTILIZATION),) \
+		$(if $(strip $(ADAPTIVE_MAX_BATCH_SIZE)),--adaptive_max_batch_size $(ADAPTIVE_MAX_BATCH_SIZE),) \
+		$(if $(strip $(ADAPTIVE_MEMORY_BUDGET)),--adaptive_memory_budget $(ADAPTIVE_MEMORY_BUDGET),) \
+		$(if $(strip $(ADAPTIVE_TARGET_BATCH_COST)),--adaptive_target_batch_cost $(ADAPTIVE_TARGET_BATCH_COST),) \
+		$(if $(strip $(ADAPTIVE_SEED)),--adaptive_seed $(ADAPTIVE_SEED),)
 
 synth:
 	@test -n "$(strip $(SYNTH_CKPT))" || (echo "SYNTH_CKPT is required." && exit 1)

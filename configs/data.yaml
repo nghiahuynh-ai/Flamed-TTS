@@ -10,10 +10,27 @@ prompt_dur_max: 5 #seconds
 prompt_reduced_factor: 0.8
 down_factors: [2, 4, 5, 5]
 batch_size: 32
+val_batch_size: 32
 num_workers: 1
 vocab_size: 1024
 pin_memory: false
+persistent_workers: auto
+prefetch_factor: 4
+multiprocessing_context: auto
+shuffle_train: true
+shuffle_val: false
+drop_last_train: false
 cleaners: ['english_cleaners']
 add_blank: False
 seed: null
 sil_phones: null
+adaptive_batching:
+  enabled: false
+  target_memory_utilization: 0.9
+  max_batch_size: 64
+  reference_length_quantile: 0.95
+  text_length_weight: 0.0
+  memory_budget: null
+  target_batch_cost: null
+  seed: null
+  shuffle: true
